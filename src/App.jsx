@@ -11,7 +11,7 @@ import {
   signOut,
   onAuthStateChanged,
 } from 'firebase/auth';
-import { getFirestore, doc, getDoc, setDoc, collection, onSnapshot, serverTimestamp } from 'firebase/firestore';
+import { getFirestore, doc, getDoc, setDoc, deleteDoc, collection, onSnapshot, serverTimestamp } from 'firebase/firestore';
 
 // === FIREBASE ===
 const firebaseConfig = {
@@ -236,6 +236,7 @@ export default function KidTracker() {
   const [pickerTarget, setPickerTarget] = useState(null);
   const [statsView, setStatsView] = useState('week');
   const [leaderboardEntries, setLeaderboardEntries] = useState([]);
+  const [joinLeaderboard, setJoinLeaderboard] = useState(true);
   const syncedRef = useRef({});
 
   useEffect(() => {
@@ -255,6 +256,7 @@ export default function KidTracker() {
     setWeeklyMatrix(data.weeklyMatrix ?? {});
     setBonusHistory(data.bonusHistory ?? []);
     setRedeemHistory(data.redeemHistory ?? []);
+    setJoinLeaderboard(data.joinLeaderboard ?? true);
   };
 
   // Theo dõi đăng nhập + tải dữ liệu từ Firestore
@@ -302,7 +304,7 @@ export default function KidTracker() {
     if (!user || !dataLoaded) return;
     const t = setTimeout(() => {
       setDoc(doc(db, 'users', user.uid), {
-        childName, childAvatar, totalStars, weeklyGoal,
+        childName, childAvatar, totalStars, weeklyGoal, joinLeaderboard,
         tasks, rewards, weeklyMatrix, bonusHistory, redeemHistory,
         updatedAt: serverTimestamp(),
       })
@@ -313,7 +315,7 @@ export default function KidTracker() {
         });
     }, 800);
     return () => clearTimeout(t);
-  }, [user?.uid, dataLoaded, childName, childAvatar, totalStars, weeklyGoal, tasks, rewards, weeklyMatrix, bonusHistory, redeemHistory]);
+  }, [user?.uid, dataLoaded, childName, childAvatar, totalStars, weeklyGoal, joinLeaderboard, tasks, rewards, weeklyMatrix, bonusHistory, redeemHistory]);
 
   // Đẩy điểm từng tuần của bé lên bảng vàng chung của lớp
   useEffect(() => {
@@ -328,6 +330,19 @@ export default function KidTracker() {
       bonusHistory.forEach(l => { if (l.week) weekly[l.week] = (weekly[l.week] || 0) + l.points; });
       if (weekly[currentRealWeek] === undefined) weekly[currentRealWeek] = 0;
       const lbAvatar = (childAvatar.startsWith('data:') || childAvatar.startsWith('http')) ? '🙂' : childAvatar;
+
+      // Tắt tham gia: xóa thông tin của bé khỏi bảng vàng chung
+      if (!joinLeaderboard) {
+        Object.keys(weekly).forEach((wk) => {
+          if (syncedRef.current[wk] === 'off') return;
+          syncedRef.current[wk] = 'off';
+          deleteDoc(doc(db, 'weeklyScores', wk, 'entries', user.uid)).catch((err) => {
+            console.error(err);
+            delete syncedRef.current[wk];
+          });
+        });
+        return;
+      }
       Object.entries(weekly).forEach(([wk, stars]) => {
         const sig = `${stars}|${childName}|${lbAvatar}`;
         if (syncedRef.current[wk] === sig) return;
@@ -341,18 +356,18 @@ export default function KidTracker() {
       });
     }, 1000);
     return () => clearTimeout(t);
-  }, [user?.uid, dataLoaded, weeklyMatrix, bonusHistory, childName, childAvatar, currentRealWeek]);
+  }, [user?.uid, dataLoaded, joinLeaderboard, weeklyMatrix, bonusHistory, childName, childAvatar, currentRealWeek]);
 
   // Nghe bảng vàng của tuần đang chọn (chỉ khi mở tab Bảng vàng)
   useEffect(() => {
-    if (!user || currentTab !== 'leaderboard') return;
+    if (!user || currentTab !== 'leaderboard' || !joinLeaderboard) return;
     const unsub = onSnapshot(
       collection(db, 'weeklyScores', leaderboardWeek, 'entries'),
       (snap) => setLeaderboardEntries(snap.docs.map(d => ({ uid: d.id, ...d.data() }))),
       (err) => console.error(err)
     );
     return () => unsub();
-  }, [user?.uid, currentTab, leaderboardWeek]);
+  }, [user?.uid, currentTab, leaderboardWeek, joinLeaderboard]);
 
   const handleAuthSubmit = async (e) => {
     e.preventDefault();
@@ -982,7 +997,24 @@ export default function KidTracker() {
         )}
 
         {/* TAB 3: BẢNG VÀNG */}
-        {currentTab === 'leaderboard' && (
+        {currentTab === 'leaderboard' && !joinLeaderboard && (
+          <div className={`p-6 rounded-3xl border text-center space-y-3 ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-sky-200 shadow-sm'}`}>
+            <div className="text-5xl">🙈</div>
+            <h2 className="font-extrabold text-base text-slate-900 dark:text-white">Bạn đang không tham gia Bảng vàng</h2>
+            <p className="text-sm text-slate-600 dark:text-slate-300">
+              Thông tin của bé đang được ẩn khỏi bảng xếp hạng lớp, và bé cũng không xem được bảng này. Bật lại để cùng thi đua với các bạn.
+            </p>
+            <button
+              type="button"
+              onClick={() => setJoinLeaderboard(true)}
+              className="px-5 py-2.5 bg-sky-500 hover:bg-sky-600 text-white font-bold text-sm rounded-xl shadow-md transition-all"
+            >
+              Tham gia Bảng vàng
+            </button>
+          </div>
+        )}
+
+        {currentTab === 'leaderboard' && joinLeaderboard && (
           <div className="space-y-4">
             <div className="text-center p-6 bg-gradient-to-r from-sky-400 via-indigo-400 to-sky-500 text-white rounded-3xl shadow-lg relative overflow-hidden">
               <span className="absolute -right-4 -bottom-4 text-8xl opacity-20">🏆</span>
@@ -1160,6 +1192,28 @@ export default function KidTracker() {
                     className="w-28 px-3 py-2 text-sm rounded-xl border font-bold bg-white border-slate-300 text-slate-900 dark:bg-slate-700 dark:border-slate-600 dark:text-white shadow-sm"
                   />
                 </div>
+              </div>
+            </div>
+
+            <div className={`p-4 rounded-2xl border space-y-3 ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-sky-200 shadow-sm'}`}>
+              <h3 className="font-bold text-sm border-b pb-2 text-slate-900 dark:text-white border-sky-100 dark:border-slate-700">🏆 Bảng vàng lớp</h3>
+              <div className="flex items-start justify-between gap-4">
+                <div className="space-y-1">
+                  <p className="text-sm font-bold text-slate-900 dark:text-white">Tham gia Bảng vàng</p>
+                  <p className="text-xs text-slate-600 dark:text-slate-300">
+                    Khi bật, tên, emoji và số sao mỗi tuần của bé hiện trên bảng xếp hạng cho các bạn trong lớp.
+                    Khi tắt, thông tin của bé được xóa khỏi bảng vàng, các bạn không nhìn thấy, và bé cũng không xem được bảng này.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={joinLeaderboard}
+                  onClick={() => setJoinLeaderboard(!joinLeaderboard)}
+                  className={`relative shrink-0 w-12 h-7 rounded-full transition-colors ${joinLeaderboard ? 'bg-sky-500' : 'bg-slate-300 dark:bg-slate-600'}`}
+                >
+                  <span className={`absolute top-0.5 left-0.5 w-6 h-6 rounded-full bg-white shadow transition-transform ${joinLeaderboard ? 'translate-x-5' : ''}`} />
+                </button>
               </div>
             </div>
 
