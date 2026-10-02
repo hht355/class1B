@@ -90,8 +90,7 @@ export default function KidTracker() {
   const [bonusReason, setBonusReason] = useState('');
   const [leaderboardWeek, setLeaderboardWeek] = useState(currentRealWeek);
 
-  // Trạng thái chọn Emoji mở rộng
-  const [pickerTarget, setPickerTarget] = useState(null); // { type: 'task' | 'reward', id: string } hoặc 'avatar'
+  const [pickerTarget, setPickerTarget] = useState(null);
 
   useEffect(() => {
     localStorage.setItem('kt_dark', darkMode);
@@ -262,7 +261,6 @@ export default function KidTracker() {
     return mockList.sort((a, b) => b.stars - a.stars);
   }, [childName, childAvatar, starsEarnedInSelectedWeek]);
 
-  // Thống kê lịch sử qua các tuần
   const weeklyStatsList = useMemo(() => {
     const weeksMap = {};
     Object.keys(weeklyMatrix).forEach(wk => {
@@ -283,7 +281,7 @@ export default function KidTracker() {
           <div className="text-center mb-8">
             <div className="inline-block p-4 rounded-full bg-amber-100 mb-3 text-4xl shadow-inner">⭐</div>
             <h1 className="text-3xl font-extrabold text-amber-500">Class 1B</h1>
-            <p className="text-sm opacity-75 mt-1">Cùng con rèn luyện thói quen tốt mỗi ngày</p>
+            <p className="text-sm text-slate-600 dark:text-slate-300 mt-1">Cùng con rèn luyện thói quen tốt mỗi ngày</p>
           </div>
 
           <form onSubmit={handleAuthSubmit} className="space-y-4">
@@ -295,7 +293,7 @@ export default function KidTracker() {
                 value={usernameInput}
                 onChange={(e) => setUsernameInput(e.target.value)}
                 placeholder="VD: nhoc_bin"
-                className="w-full px-4 py-3 rounded-xl border bg-slate-50 border-slate-200 text-slate-900 dark:bg-slate-700 dark:border-slate-600 dark:text-white focus:outline-none focus:ring-2 focus:ring-sky-400"
+                className="w-full px-4 py-3 rounded-xl border bg-white border-slate-300 text-slate-900 dark:bg-slate-700 dark:border-slate-600 dark:text-white focus:outline-none focus:ring-2 focus:ring-sky-400 shadow-sm"
               />
             </div>
 
@@ -308,7 +306,7 @@ export default function KidTracker() {
                   value={passwordInput}
                   onChange={(e) => setPasswordInput(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full px-4 py-3 pr-11 rounded-xl border bg-slate-50 border-slate-200 text-slate-900 dark:bg-slate-700 dark:border-slate-600 dark:text-white focus:outline-none focus:ring-2 focus:ring-sky-400"
+                  className="w-full px-4 py-3 pr-11 rounded-xl border bg-white border-slate-300 text-slate-900 dark:bg-slate-700 dark:border-slate-600 dark:text-white focus:outline-none focus:ring-2 focus:ring-sky-400 shadow-sm"
                 />
                 <button
                   type="button"
@@ -353,13 +351,13 @@ export default function KidTracker() {
   }
 
   return (
-    <div className={`min-h-screen transition-colors duration-200 pb-24 ${darkMode ? 'bg-slate-900 text-slate-100' : 'bg-sky-50 text-slate-800'}`}>
+    <div className={`min-h-screen transition-colors duration-200 pb-24 ${darkMode ? 'bg-slate-900 text-slate-100' : 'bg-sky-50 text-slate-900'}`}>
       
       {/* HEADER TỔNG */}
       <header className={`sticky top-0 z-30 px-4 py-3 border-b backdrop-blur-md transition-colors ${darkMode ? 'bg-slate-800/90 border-slate-700' : 'bg-white/90 border-sky-100 shadow-sm'}`}>
         <div className="max-w-4xl mx-auto flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <div className="w-12 h-12 rounded-2xl overflow-hidden flex items-center justify-center bg-amber-100 dark:bg-slate-700 shadow-sm text-2xl">
+            <div className="w-12 h-12 rounded-2xl overflow-hidden flex items-center justify-center bg-sky-100 dark:bg-slate-700 shadow-sm text-2xl border border-sky-200 dark:border-slate-600">
               {childAvatar.startsWith('data:') || childAvatar.startsWith('http') ? (
                 <img src={childAvatar} alt="Avatar" className="w-full h-full object-cover" />
               ) : (
@@ -367,18 +365,18 @@ export default function KidTracker() {
               )}
             </div>
             <div>
-              <h1 className="font-extrabold text-lg flex items-center gap-1.5">
+              <h1 className="font-extrabold text-lg text-slate-900 dark:text-white flex items-center gap-1.5">
                 {childName}
                 <span className="text-xs px-2 py-0.5 bg-sky-100 text-sky-700 dark:bg-sky-900 dark:text-sky-300 font-bold rounded-full">Lớp 1B</span>
               </h1>
-              <p className="text-xs opacity-75">Cùng con tích sao đổi quà</p>
+              <p className="text-xs text-slate-600 dark:text-slate-300">Cùng con tích sao đổi quà</p>
             </div>
           </div>
 
           <div className="flex items-center space-x-3">
             <button
               onClick={() => setDarkMode(!darkMode)}
-              className={`p-2 rounded-xl border transition-all ${darkMode ? 'bg-slate-700 border-slate-600 text-amber-400' : 'bg-slate-100 border-slate-200 text-slate-600'}`}
+              className={`p-2 rounded-xl border transition-all ${darkMode ? 'bg-slate-700 border-slate-600 text-amber-400' : 'bg-slate-100 border-slate-200 text-slate-700'}`}
               title="Bật/Tắt chế độ tối"
             >
               {darkMode ? <IconSun /> : <IconMoon />}
@@ -405,8 +403,8 @@ export default function KidTracker() {
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
           <div className="bg-white dark:bg-slate-800 p-4 rounded-3xl shadow-2xl relative max-w-sm w-full">
             <div className="flex justify-between items-center mb-3">
-              <h3 className="font-bold text-sm text-slate-800 dark:text-white">Chọn biểu tượng cảm xúc</h3>
-              <button onClick={() => setPickerTarget(null)} className="text-slate-400 hover:text-slate-600 font-bold text-lg px-2">✕</button>
+              <h3 className="font-bold text-sm text-slate-900 dark:text-white">Chọn biểu tượng cảm xúc</h3>
+              <button onClick={() => setPickerTarget(null)} className="text-slate-500 hover:text-slate-700 dark:text-slate-400 font-bold text-lg px-2">✕</button>
             </div>
             <EmojiPicker onEmojiClick={handleEmojiSelect} theme={darkMode ? 'dark' : 'light'} width="100%" height={350} />
           </div>
@@ -419,12 +417,12 @@ export default function KidTracker() {
         {/* TAB 1: NHIỆM VỤ */}
         {currentTab === 'tasks' && (
           <div className="space-y-4">
-            <div className={`p-4 rounded-2xl border flex flex-col sm:flex-row items-center justify-between gap-3 ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-sky-100 shadow-sm'}`}>
+            <div className={`p-4 rounded-2xl border flex flex-col sm:flex-row items-center justify-between gap-3 ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-sky-200 shadow-sm'}`}>
               <div className="flex items-center space-x-2">
                 <span className="text-2xl">📅</span>
                 <div>
-                  <h2 className="font-bold text-base text-slate-800 dark:text-white">Đang xem: <span className="text-sky-600 dark:text-sky-400 font-extrabold">{selectedWeek}</span></h2>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">Tích lũy tuần này: <b>{starsEarnedInSelectedWeek}</b> / {weeklyGoal} ⭐</p>
+                  <h2 className="font-bold text-base text-slate-900 dark:text-white">Đang xem: <span className="text-sky-600 dark:text-sky-400 font-extrabold">{selectedWeek}</span></h2>
+                  <p className="text-xs text-slate-600 dark:text-slate-300">Tích lũy tuần này: <b>{starsEarnedInSelectedWeek}</b> / {weeklyGoal} ⭐</p>
                 </div>
               </div>
 
@@ -435,7 +433,7 @@ export default function KidTracker() {
                     const wNum = parseInt(w) - 1;
                     setSelectedWeek(`${y}-W${wNum < 10 ? '0' + wNum : wNum}`);
                   }}
-                  className="px-3 py-1.5 text-xs font-bold rounded-xl border bg-white border-slate-200 text-slate-700 hover:bg-slate-50 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-200 shadow-sm"
+                  className="px-3 py-1.5 text-xs font-bold rounded-xl border bg-sky-50 border-sky-200 text-sky-800 hover:bg-sky-100 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-200 shadow-sm"
                 >
                   ◄ Tuần trước
                 </button>
@@ -455,15 +453,15 @@ export default function KidTracker() {
                     const wNum = parseInt(w) + 1;
                     setSelectedWeek(`${y}-W${wNum < 10 ? '0' + wNum : wNum}`);
                   }}
-                  className="px-3 py-1.5 text-xs font-bold rounded-xl border bg-white border-slate-200 text-slate-700 hover:bg-slate-50 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-200 shadow-sm"
+                  className="px-3 py-1.5 text-xs font-bold rounded-xl border bg-sky-50 border-sky-200 text-sky-800 hover:bg-sky-100 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-200 shadow-sm"
                 >
                   Tuần sau ►
                 </button>
               </div>
             </div>
 
-            <div className={`p-4 rounded-2xl border ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-sky-100 shadow-sm'}`}>
-              <div className="flex justify-between items-center text-xs font-bold mb-1.5 text-slate-700 dark:text-slate-200">
+            <div className={`p-4 rounded-2xl border ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-sky-200 shadow-sm'}`}>
+              <div className="flex justify-between items-center text-xs font-bold mb-1.5 text-slate-800 dark:text-slate-200">
                 <span>🎯 Tiến độ mục tiêu tuần này</span>
                 <span>{Math.round((starsEarnedInSelectedWeek / weeklyGoal) * 100)}%</span>
               </div>
@@ -475,14 +473,14 @@ export default function KidTracker() {
               </div>
             </div>
 
-            <div className={`rounded-2xl border overflow-hidden shadow-sm ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-sky-100'}`}>
+            <div className={`rounded-2xl border overflow-hidden shadow-sm ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-sky-200'}`}>
               <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
+                <table className="w-full border-collapse">
                   <thead>
-                    <tr className={`text-xs uppercase border-b ${darkMode ? 'bg-slate-700/50 border-slate-700 text-slate-300' : 'bg-sky-50/70 border-sky-100 text-slate-600'}`}>
-                      <th className="p-3.5 sticky left-0 z-10 bg-inherit min-w-[160px]">Nhiệm vụ</th>
+                    <tr className={`text-xs uppercase border-b ${darkMode ? 'bg-slate-700/50 border-slate-700 text-slate-300' : 'bg-sky-100/70 border-sky-200 text-slate-800'}`}>
+                      <th className="p-3.5 text-left sticky left-0 z-10 bg-inherit min-w-[160px]">Nhiệm vụ</th>
                       {daysOfWeek.map(day => (
-                        <th key={day} className="p-3.5 text-center min-w-[48px]">{day}</th>
+                        <th key={day} className="p-3.5 w-14 text-center">{day}</th>
                       ))}
                     </tr>
                   </thead>
@@ -492,7 +490,7 @@ export default function KidTracker() {
                       const taskDays = weekData[task.id] || {};
                       return (
                         <tr key={task.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-700/30">
-                          <td className={`p-3.5 font-medium sticky left-0 z-10 ${darkMode ? 'bg-slate-800 text-slate-100' : 'bg-white text-slate-800'}`}>
+                          <td className={`p-3.5 font-medium sticky left-0 z-10 ${darkMode ? 'bg-slate-800 text-slate-100' : 'bg-white text-slate-900'}`}>
                             <div className="flex items-center space-x-2">
                               <span className="text-xl">{task.icon}</span>
                               <span className="line-clamp-2">{task.name}</span>
@@ -501,17 +499,19 @@ export default function KidTracker() {
                           {daysOfWeek.map(day => {
                             const isChecked = !!taskDays[day];
                             return (
-                              <td key={day} className="p-2 text-center">
-                                <button
-                                  onClick={() => toggleStar(task.id, day)}
-                                  className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all ${
-                                    isChecked
-                                      ? 'bg-amber-400 text-amber-950 shadow-md shadow-amber-400/30 scale-105'
-                                      : 'bg-slate-100 text-slate-400 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-400'
-                                  }`}
-                                >
-                                  <IconStar className={isChecked ? 'text-amber-950 w-6 h-6' : 'text-slate-400 dark:text-slate-500 w-5 h-5'} />
-                                </button>
+                              <td key={day} className="p-2 w-14 text-center align-middle">
+                                <div className="flex justify-center items-center">
+                                  <button
+                                    onClick={() => toggleStar(task.id, day)}
+                                    className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all ${
+                                      isChecked
+                                        ? 'bg-amber-400 text-amber-950 shadow-md shadow-amber-400/30 scale-105'
+                                        : 'bg-sky-50 text-sky-400 hover:bg-sky-100 border border-sky-200 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-400'
+                                    }`}
+                                  >
+                                    <IconStar className={isChecked ? 'text-amber-950 w-6 h-6' : 'text-sky-300 dark:text-slate-500 w-5 h-5'} />
+                                  </button>
+                                </div>
                               </td>
                             );
                           })}
@@ -523,15 +523,15 @@ export default function KidTracker() {
               </div>
             </div>
 
-            <div className={`p-4 rounded-2xl border space-y-3 ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-sky-100 shadow-sm'}`}>
-              <h3 className="font-bold text-sm text-slate-800 dark:text-white">⚡ Thưởng / Phạt điểm ngoại lệ</h3>
+            <div className={`p-4 rounded-2xl border space-y-3 ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-sky-200 shadow-sm'}`}>
+              <h3 className="font-bold text-sm text-slate-900 dark:text-white">⚡ Thưởng / Phạt điểm ngoại lệ</h3>
               <div className="flex flex-col sm:flex-row gap-2">
                 <input
                   type="text"
                   placeholder="Lý do (VD: Giúp mẹ lau nhà...)"
                   value={bonusReason}
                   onChange={(e) => setBonusReason(e.target.value)}
-                  className="flex-1 px-3 py-2 text-sm rounded-xl border bg-white border-slate-200 text-slate-900 dark:bg-slate-700 dark:border-slate-600 dark:text-white focus:outline-none focus:ring-2 focus:ring-sky-400 shadow-sm"
+                  className="flex-1 px-3 py-2 text-sm rounded-xl border bg-white border-slate-300 text-slate-900 dark:bg-slate-700 dark:border-slate-600 dark:text-white focus:outline-none focus:ring-2 focus:ring-sky-400 shadow-sm"
                 />
                 <div className="flex items-center space-x-2">
                   <input
@@ -540,7 +540,7 @@ export default function KidTracker() {
                     max="50"
                     value={bonusPoints}
                     onChange={(e) => setBonusPoints(e.target.value)}
-                    className="w-16 px-2 py-2 text-sm text-center font-bold rounded-xl border bg-white border-slate-200 text-slate-900 dark:bg-slate-700 dark:border-slate-600 dark:text-white shadow-sm"
+                    className="w-16 px-2 py-2 text-sm text-center font-bold rounded-xl border bg-white border-slate-300 text-slate-900 dark:bg-slate-700 dark:border-slate-600 dark:text-white shadow-sm"
                   />
                   <button onClick={() => handleApplyBonus(true)} className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-sm rounded-xl shadow-md transition-all">+ Thưởng</button>
                   <button onClick={() => handleApplyBonus(false)} className="px-4 py-2 bg-rose-500 hover:bg-rose-600 text-white font-bold text-sm rounded-xl shadow-md transition-all">- Phạt</button>
@@ -554,17 +554,17 @@ export default function KidTracker() {
         {currentTab === 'rewards' && (
           <div className="space-y-6">
             <div>
-              <h2 className="text-lg font-extrabold mb-3 text-slate-800 dark:text-white">🎁 Danh Sách Phần Thưởng</h2>
+              <h2 className="text-lg font-extrabold mb-3 text-slate-900 dark:text-white">🎁 Danh Sách Phần Thưởng</h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {rewards.map(reward => {
                   const canRedeem = totalStars >= reward.cost;
                   return (
-                    <div key={reward.id} className={`p-4 rounded-2xl border flex items-center justify-between transition-all ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-sky-100 shadow-sm'}`}>
+                    <div key={reward.id} className={`p-4 rounded-2xl border flex items-center justify-between transition-all ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-sky-200 shadow-sm'}`}>
                       <div className="flex items-center space-x-3">
-                        <div className="text-3xl p-2 bg-amber-50 dark:bg-slate-700 rounded-2xl">{reward.icon}</div>
+                        <div className="text-3xl p-2 bg-amber-50 dark:bg-slate-700 rounded-2xl border border-amber-100 dark:border-slate-600">{reward.icon}</div>
                         <div>
-                          <h3 className="font-bold text-sm text-slate-800 dark:text-white">{reward.name}</h3>
-                          <p className="text-xs text-amber-500 font-bold flex items-center gap-1 mt-0.5">
+                          <h3 className="font-bold text-sm text-slate-900 dark:text-white">{reward.name}</h3>
+                          <p className="text-xs text-amber-600 dark:text-amber-400 font-bold flex items-center gap-1 mt-0.5">
                             <IconStar className="w-4 h-4 text-amber-400" /> {reward.cost} Sao
                           </p>
                         </div>
@@ -573,7 +573,7 @@ export default function KidTracker() {
                         onClick={() => handleRedeem(reward)}
                         disabled={!canRedeem}
                         className={`px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-sm ${
-                          canRedeem ? 'bg-sky-500 hover:bg-sky-600 text-white scale-105' : 'bg-slate-200 dark:bg-slate-700 text-slate-400 cursor-not-allowed'
+                          canRedeem ? 'bg-sky-500 hover:bg-sky-600 text-white scale-105' : 'bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 cursor-not-allowed'
                         }`}
                       >
                         {canRedeem ? 'Đổi quà' : 'Thiếu sao'}
@@ -584,19 +584,19 @@ export default function KidTracker() {
               </div>
             </div>
 
-            <div className={`p-4 rounded-2xl border space-y-3 ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-sky-100 shadow-sm'}`}>
-              <h3 className="font-bold text-sm text-slate-800 dark:text-white">📜 Lịch sử đổi quà</h3>
+            <div className={`p-4 rounded-2xl border space-y-3 ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-sky-200 shadow-sm'}`}>
+              <h3 className="font-bold text-sm text-slate-900 dark:text-white">📜 Lịch sử đổi quà</h3>
               {redeemHistory.length === 0 ? (
-                <p className="text-xs text-slate-400 text-center py-4">Bé chưa đổi phần thưởng nào.</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 text-center py-4">Bé chưa đổi phần thưởng nào.</p>
               ) : (
                 <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
                   {redeemHistory.map(item => (
-                    <div key={item.id} className={`p-3 rounded-xl border flex items-center justify-between text-xs ${item.status === 'cancelled' ? 'opacity-50 line-through bg-slate-100 dark:bg-slate-700/40 border-slate-200 dark:border-slate-700' : 'bg-slate-50 dark:bg-slate-700/60 border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200'}`}>
+                    <div key={item.id} className={`p-3 rounded-xl border flex items-center justify-between text-xs ${item.status === 'cancelled' ? 'opacity-50 line-through bg-slate-100 dark:bg-slate-700/40 border-slate-200 dark:border-slate-700 text-slate-600' : 'bg-sky-50/60 dark:bg-slate-700/60 border-sky-200 dark:border-slate-600 text-slate-900 dark:text-slate-200'}`}>
                       <div className="flex items-center space-x-2">
                         <span className="text-lg">{item.rewardIcon}</span>
                         <div>
                           <p className="font-bold">{item.rewardName} (-{item.cost} ⭐)</p>
-                          <p className="text-[10px] opacity-75">{item.time} - {item.date}</p>
+                          <p className="text-[10px] text-slate-500 dark:text-slate-400">{item.time} - {item.date}</p>
                           {item.status === 'cancelled' && <p className="text-[10px] text-rose-500 font-medium no-underline">Đã hủy: {item.cancelTime}</p>}
                         </div>
                       </div>
@@ -628,21 +628,21 @@ export default function KidTracker() {
               </div>
             </div>
 
-            <div className={`p-4 rounded-3xl border space-y-3 ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-sky-100 shadow-sm'}`}>
+            <div className={`p-4 rounded-3xl border space-y-3 ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-sky-200 shadow-sm'}`}>
               {classLeaderboard.map((item, index) => (
-                <div key={index} className={`p-3.5 rounded-2xl border flex items-center justify-between transition-all ${item.isSelf ? 'ring-2 ring-sky-400 bg-sky-50/50 dark:bg-slate-700/80' : 'bg-slate-50/50 dark:bg-slate-700/30'}`}>
+                <div key={index} className={`p-3.5 rounded-2xl border flex items-center justify-between transition-all ${item.isSelf ? 'ring-2 ring-sky-400 bg-sky-50 dark:bg-slate-700/80 border-sky-300' : 'bg-white dark:bg-slate-700/30 border-slate-100 dark:border-slate-700'}`}>
                   <div className="flex items-center space-x-3">
-                    <div className="w-8 h-8 rounded-full flex items-center justify-center border font-bold text-xs bg-slate-100 dark:bg-slate-600">
+                    <div className="w-8 h-8 rounded-full flex items-center justify-center border font-bold text-xs bg-slate-100 dark:bg-slate-600 text-slate-800 dark:text-slate-200">
                       {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : index + 1}
                     </div>
-                    <div className="w-9 h-9 rounded-xl overflow-hidden flex items-center justify-center bg-amber-100 dark:bg-slate-600 text-xl">
+                    <div className="w-10 h-10 rounded-xl overflow-hidden flex items-center justify-center bg-sky-100 dark:bg-slate-600 text-2xl border border-sky-200 dark:border-slate-500 shadow-sm">
                       {item.avatar.startsWith('data:') || item.avatar.startsWith('http') ? (
                         <img src={item.avatar} alt="Avatar" className="w-full h-full object-cover" />
                       ) : (
                         item.avatar
                       )}
                     </div>
-                    <h4 className="font-bold text-sm text-slate-800 dark:text-white flex items-center gap-1.5">
+                    <h4 className="font-bold text-sm text-slate-900 dark:text-white flex items-center gap-1.5">
                       {item.name}
                       {item.isSelf && <span className="text-[10px] bg-sky-500 text-white px-2 py-0.2 rounded-full font-black">Bé nhà bạn</span>}
                     </h4>
@@ -657,21 +657,21 @@ export default function KidTracker() {
           </div>
         )}
 
-        {/* TAB 4: THỐNG KÊ (CÓ BIỂU ĐỒ PERFORMANCE QUA CÁC TUẦN) */}
+        {/* TAB 4: THỐNG KÊ */}
         {currentTab === 'stats' && (
           <div className="space-y-6">
-            <div className={`p-4 rounded-2xl border space-y-4 ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-sky-100 shadow-sm'}`}>
-              <h2 className="font-extrabold text-base text-slate-800 dark:text-white flex items-center gap-2">
+            <div className={`p-4 rounded-2xl border space-y-4 ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-sky-200 shadow-sm'}`}>
+              <h2 className="font-extrabold text-base text-slate-900 dark:text-white flex items-center gap-2">
                 <span>📈 Performance Trending (Phong độ qua các tuần)</span>
               </h2>
 
               {weeklyStatsList.length === 0 ? (
-                <p className="text-xs text-slate-400 text-center py-6">Chưa có dữ liệu lịch sử các tuần trước.</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 text-center py-6">Chưa có dữ liệu lịch sử các tuần trước.</p>
               ) : (
                 <div className="space-y-3">
                   {weeklyStatsList.map(stat => (
                     <div key={stat.week} className="space-y-1">
-                      <div className="flex justify-between text-xs font-bold text-slate-700 dark:text-slate-300">
+                      <div className="flex justify-between text-xs font-bold text-slate-800 dark:text-slate-300">
                         <span>Tuần: {stat.week}</span>
                         <span className="text-amber-500">{stat.stars} ⭐</span>
                       </div>
@@ -687,10 +687,10 @@ export default function KidTracker() {
               )}
             </div>
 
-            <div className={`p-4 rounded-2xl border space-y-3 ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-sky-100 shadow-sm'}`}>
-              <h2 className="font-extrabold text-base text-slate-800 dark:text-white">📜 Lịch Sử Thưởng / Phạt Đột Xuất</h2>
+            <div className={`p-4 rounded-2xl border space-y-3 ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-sky-200 shadow-sm'}`}>
+              <h2 className="font-extrabold text-base text-slate-900 dark:text-white">📜 Lịch Sử Thưởng / Phạt Đột Xuất</h2>
               {bonusHistory.length === 0 ? (
-                <p className="text-xs text-slate-400 text-center py-4">Chưa có lịch sử thưởng / phạt ngoại lệ nào.</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 text-center py-4">Chưa có lịch sử thưởng / phạt ngoại lệ nào.</p>
               ) : (
                 <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
                   {bonusHistory.map(log => (
@@ -711,24 +711,24 @@ export default function KidTracker() {
         {/* TAB 5: CÀI ĐẶT */}
         {currentTab === 'settings' && (
           <div className="space-y-6">
-            <div className={`p-4 rounded-2xl border space-y-4 ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-sky-100 shadow-sm'}`}>
-              <h3 className="font-bold text-sm border-b pb-2 text-slate-800 dark:text-white">👤 Thông tin & Avatar của bé</h3>
+            <div className={`p-4 rounded-2xl border space-y-4 ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-sky-200 shadow-sm'}`}>
+              <h3 className="font-bold text-sm border-b pb-2 text-slate-900 dark:text-white border-sky-100 dark:border-slate-700">👤 Thông tin & Avatar của bé</h3>
               
               <div className="space-y-3">
                 <div>
-                  <label className="block text-xs font-semibold mb-1 text-slate-700 dark:text-slate-200">Tên của bé</label>
+                  <label className="block text-xs font-semibold mb-1 text-slate-800 dark:text-slate-200">Tên của bé</label>
                   <input
                     type="text"
                     value={childName}
                     onChange={(e) => setChildName(e.target.value)}
-                    className="w-full px-3 py-2 text-sm rounded-xl border bg-white border-slate-200 text-slate-900 dark:bg-slate-700 dark:border-slate-600 dark:text-white shadow-sm"
+                    className="w-full px-3 py-2 text-sm rounded-xl border bg-white border-slate-300 text-slate-900 dark:bg-slate-700 dark:border-slate-600 dark:text-white shadow-sm"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold mb-1 text-slate-700 dark:text-slate-200">Avatar (Chọn emoji hoặc Tải ảnh từ máy)</label>
+                  <label className="block text-xs font-semibold mb-1 text-slate-800 dark:text-slate-200">Avatar (Chọn emoji hoặc Tải ảnh từ máy)</label>
                   <div className="flex items-center gap-3">
-                    <div className="w-14 h-14 rounded-2xl overflow-hidden border bg-amber-100 flex items-center justify-center text-3xl shadow-sm">
+                    <div className="w-14 h-14 rounded-2xl overflow-hidden border border-sky-300 bg-sky-100 dark:bg-slate-700 dark:border-slate-600 flex items-center justify-center text-3xl shadow-sm">
                       {childAvatar.startsWith('data:') || childAvatar.startsWith('http') ? (
                         <img src={childAvatar} alt="Avatar" className="w-full h-full object-cover" />
                       ) : (
@@ -752,26 +752,26 @@ export default function KidTracker() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold mb-1 text-slate-700 dark:text-slate-200">Mục tiêu sao mỗi tuần</label>
+                  <label className="block text-xs font-semibold mb-1 text-slate-800 dark:text-slate-200">Mục tiêu sao mỗi tuần</label>
                   <input
                     type="number"
                     value={weeklyGoal}
                     onChange={(e) => setWeeklyGoal(parseInt(e.target.value) || 10)}
-                    className="w-28 px-3 py-2 text-sm rounded-xl border font-bold bg-white border-slate-200 text-slate-900 dark:bg-slate-700 dark:border-slate-600 dark:text-white shadow-sm"
+                    className="w-28 px-3 py-2 text-sm rounded-xl border font-bold bg-white border-slate-300 text-slate-900 dark:bg-slate-700 dark:border-slate-600 dark:text-white shadow-sm"
                   />
                 </div>
               </div>
             </div>
 
-            <div className={`p-4 rounded-2xl border space-y-3 ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-sky-100 shadow-sm'}`}>
-              <h3 className="font-bold text-sm border-b pb-2 text-slate-800 dark:text-white">📋 Danh sách nhiệm vụ</h3>
+            <div className={`p-4 rounded-2xl border space-y-3 ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-sky-200 shadow-sm'}`}>
+              <h3 className="font-bold text-sm border-b pb-2 text-slate-900 dark:text-white border-sky-100 dark:border-slate-700">📋 Danh sách nhiệm vụ</h3>
               <div className="space-y-2">
                 {tasks.map(task => (
                   <div key={task.id} className="flex items-center space-x-2">
                     <button
                       type="button"
                       onClick={() => setPickerTarget({ type: 'task', id: task.id })}
-                      className="w-10 h-10 text-xl rounded-xl border bg-white border-slate-200 dark:bg-slate-700 dark:border-slate-600 shadow-sm flex items-center justify-center hover:bg-slate-50"
+                      className="w-10 h-10 text-xl rounded-xl border bg-sky-50 border-sky-200 dark:bg-slate-700 dark:border-slate-600 shadow-sm flex items-center justify-center hover:bg-sky-100"
                     >
                       {task.icon}
                     </button>
@@ -779,7 +779,7 @@ export default function KidTracker() {
                       type="text"
                       value={task.name}
                       onChange={(e) => setTasks(tasks.map(t => t.id === task.id ? { ...t, name: e.target.value } : t))}
-                      className="flex-1 px-3 py-2 text-sm rounded-xl border bg-white border-slate-200 text-slate-900 dark:bg-slate-700 dark:border-slate-600 dark:text-white shadow-sm"
+                      className="flex-1 px-3 py-2 text-sm rounded-xl border bg-white border-slate-300 text-slate-900 dark:bg-slate-700 dark:border-slate-600 dark:text-white shadow-sm"
                     />
                     <button onClick={() => setTasks(tasks.filter(t => t.id !== task.id))} className="px-2.5 py-1.5 text-xs bg-rose-100 text-rose-600 rounded-xl font-bold">Xóa</button>
                   </div>
@@ -793,15 +793,15 @@ export default function KidTracker() {
               </div>
             </div>
 
-            <div className={`p-4 rounded-2xl border space-y-3 ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-sky-100 shadow-sm'}`}>
-              <h3 className="font-bold text-sm border-b pb-2 text-slate-800 dark:text-white">🎁 Cài đặt phần thưởng</h3>
+            <div className={`p-4 rounded-2xl border space-y-3 ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-sky-200 shadow-sm'}`}>
+              <h3 className="font-bold text-sm border-b pb-2 text-slate-900 dark:text-white border-sky-100 dark:border-slate-700">🎁 Cài đặt phần thưởng</h3>
               <div className="space-y-2">
                 {rewards.map(reward => (
                   <div key={reward.id} className="flex items-center space-x-2">
                     <button
                       type="button"
                       onClick={() => setPickerTarget({ type: 'reward', id: reward.id })}
-                      className="w-10 h-10 text-xl rounded-xl border bg-white border-slate-200 dark:bg-slate-700 dark:border-slate-600 shadow-sm flex items-center justify-center hover:bg-slate-50"
+                      className="w-10 h-10 text-xl rounded-xl border bg-sky-50 border-sky-200 dark:bg-slate-700 dark:border-slate-600 shadow-sm flex items-center justify-center hover:bg-sky-100"
                     >
                       {reward.icon}
                     </button>
@@ -809,13 +809,13 @@ export default function KidTracker() {
                       type="text"
                       value={reward.name}
                       onChange={(e) => setRewards(rewards.map(r => r.id === reward.id ? { ...r, name: e.target.value } : r))}
-                      className="flex-1 px-3 py-2 text-sm rounded-xl border bg-white border-slate-200 text-slate-900 dark:bg-slate-700 dark:border-slate-600 dark:text-white shadow-sm"
+                      className="flex-1 px-3 py-2 text-sm rounded-xl border bg-white border-slate-300 text-slate-900 dark:bg-slate-700 dark:border-slate-600 dark:text-white shadow-sm"
                     />
                     <input
                       type="number"
                       value={reward.cost}
                       onChange={(e) => setRewards(rewards.map(r => r.id === reward.id ? { ...r, cost: parseInt(e.target.value) || 0 } : r))}
-                      className="w-20 px-2 py-2 text-sm text-center font-bold rounded-xl border bg-white border-slate-200 text-slate-900 dark:bg-slate-700 dark:border-slate-600 dark:text-white shadow-sm"
+                      className="w-20 px-2 py-2 text-sm text-center font-bold rounded-xl border bg-white border-slate-300 text-slate-900 dark:bg-slate-700 dark:border-slate-600 dark:text-white shadow-sm"
                     />
                     <button onClick={() => setRewards(rewards.filter(r => r.id !== reward.id))} className="px-2.5 py-1.5 text-xs bg-rose-100 text-rose-600 rounded-xl font-bold">Xóa</button>
                   </div>
@@ -843,7 +843,7 @@ export default function KidTracker() {
       </main>
 
       {/* FOOTER NAVIGATION MENU */}
-      <nav className={`fixed bottom-0 left-0 right-0 z-30 px-3 py-2 border-t backdrop-blur-lg transition-colors print:hidden ${darkMode ? 'bg-slate-800/95 border-slate-700' : 'bg-white/95 border-sky-100 shadow-lg'}`}>
+      <nav className={`fixed bottom-0 left-0 right-0 z-30 px-3 py-2 border-t backdrop-blur-lg transition-colors print:hidden ${darkMode ? 'bg-slate-800/95 border-slate-700' : 'bg-white/95 border-sky-200 shadow-lg'}`}>
         <div className="max-w-md mx-auto flex items-center justify-around">
           {[
             { id: 'tasks', label: 'Nhiệm Vụ', icon: '🗓️' },
@@ -858,7 +858,7 @@ export default function KidTracker() {
               className={`flex flex-col items-center py-1 px-3 rounded-2xl transition-all ${
                 currentTab === tab.id
                   ? 'bg-sky-500 text-white font-black scale-105 shadow-sm'
-                  : 'opacity-70 hover:opacity-100 text-slate-600 dark:text-slate-300'
+                  : 'opacity-70 hover:opacity-100 text-slate-700 dark:text-slate-300'
               }`}
             >
               <span className="text-xl">{tab.icon}</span>
