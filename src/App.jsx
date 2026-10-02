@@ -1,5 +1,30 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import EmojiPicker from 'emoji-picker-react';
+import { initializeApp } from 'firebase/app';
+import {
+  getAuth,
+  GoogleAuthProvider,
+  signInWithPopup,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  sendPasswordResetEmail,
+  signOut,
+  onAuthStateChanged,
+} from 'firebase/auth';
+import { getFirestore, doc, getDoc, setDoc, collection, onSnapshot, serverTimestamp } from 'firebase/firestore';
+
+// === FIREBASE ===
+const firebaseConfig = {
+  apiKey: "AIzaSyDVlG4hRwmUbvQ8Rk1QIo4co5zN8jzooGQ",
+  authDomain: "dashboard-class-1b.firebaseapp.com",
+  projectId: "dashboard-class-1b",
+  storageBucket: "dashboard-class-1b.firebasestorage.app",
+  messagingSenderId: "803151730368",
+  appId: "1:803151730368:web:1e3d3c7d19480923b73f25",
+};
+const firebaseApp = initializeApp(firebaseConfig);
+const auth = getAuth(firebaseApp);
+const db = getFirestore(firebaseApp);
 
 // === INLINE SVG ICONS ===
 const IconStar = ({ className = "w-5 h-5 text-amber-400" }) => (
@@ -49,10 +74,141 @@ const getWeekId = (date = new Date()) => {
   return `${d.getFullYear()}-W${weekNo < 10 ? '0' + weekNo : weekNo}`;
 };
 
+const DEFAULT_TASKS = [
+  { id: 't1', name: 'Đánh răng sáng tối', icon: '🪥' },
+  { id: 't2', name: 'Dọn dẹp đồ chơi', icon: '🧸' },
+  { id: 't3', name: 'Ăn hết phần cơm', icon: '🍚' },
+  { id: 't4', name: 'Làm bài tập', icon: '✏️' },
+  { id: 't5', name: 'Chào hỏi lễ phép', icon: '🙇‍♂️' },
+];
+
+const DEFAULT_REWARDS = [
+  { id: 'r1', name: 'Xem hoạt hình 15 phút', icon: '📺', cost: 5 },
+  { id: 'r2', name: 'Đi nhà sách mua truyện', icon: '📚', cost: 15 },
+  { id: 'r3', name: 'Đi chơi công viên', icon: '🎡', cost: 20 },
+  { id: 'r4', name: 'Mua đồ chơi nhỏ', icon: '🚗', cost: 30 },
+];
+
+// Đọc dữ liệu cũ đang lưu trong localStorage (để chuyển lên cloud một lần)
+const readLocalLegacy = () => {
+  try {
+    if (!localStorage.getItem('kt_weekly_matrix') && !localStorage.getItem('kt_tasks')) return null;
+    const j = (k, fallback) => {
+      try { return JSON.parse(localStorage.getItem(k)) ?? fallback; } catch { return fallback; }
+    };
+    const avatar = localStorage.getItem('kt_child_avatar') || '👦';
+    return {
+      childName: localStorage.getItem('kt_child_name') || 'Bé Ngoan',
+      childAvatar: avatar.length > 300000 ? '👦' : avatar,
+      totalStars: parseInt(localStorage.getItem('kt_total_stars') || '0') || 0,
+      weeklyGoal: parseInt(localStorage.getItem('kt_weekly_goal') || '20') || 20,
+      tasks: j('kt_tasks', DEFAULT_TASKS),
+      rewards: j('kt_rewards', DEFAULT_REWARDS),
+      weeklyMatrix: j('kt_weekly_matrix', {}),
+      bonusHistory: j('kt_bonus_history', []),
+      redeemHistory: j('kt_redeem_history', []),
+    };
+  } catch {
+    return null;
+  }
+};
+
+const authErrorMessage = (code) => ({
+  'auth/invalid-email': 'Email không hợp lệ!',
+  'auth/missing-email': 'Vui lòng nhập email!',
+  'auth/email-already-in-use': 'Email này đã được đăng ký, hãy đăng nhập!',
+  'auth/weak-password': 'Mật khẩu quá yếu, cần ít nhất 6 ký tự!',
+  'auth/invalid-credential': 'Email hoặc mật khẩu không chính xác!',
+  'auth/user-not-found': 'Email hoặc mật khẩu không chính xác!',
+  'auth/wrong-password': 'Email hoặc mật khẩu không chính xác!',
+  'auth/too-many-requests': 'Thử quá nhiều lần, vui lòng đợi một lát rồi thử lại!',
+  'auth/network-request-failed': 'Mất kết nối mạng, vui lòng thử lại!',
+  'auth/popup-blocked': 'Trình duyệt đang chặn cửa sổ đăng nhập Google!',
+  'auth/unauthorized-domain': 'Tên miền này chưa được cho phép trong Firebase (Authentication > Settings > Authorized domains).',
+}[code] || 'Có lỗi xảy ra, vui lòng thử lại!');
+
+// Lấy ngày Thứ Năm của một tuần ISO (VD "2026-W40") để suy ra tháng
+const weekIdToThursday = (weekId) => {
+  const [y, w] = weekId.split('-W').map(Number);
+  const jan4 = new Date(y, 0, 4);
+  const monday1 = new Date(jan4);
+  monday1.setDate(jan4.getDate() - ((jan4.getDay() || 7) - 1));
+  const thursday = new Date(monday1);
+  thursday.setDate(monday1.getDate() + (w - 1) * 7 + 3);
+  return thursday;
+};
+
+// === BIỂU ĐỒ ĐƯỜNG (SVG thuần, hỗ trợ light/dark) ===
+const LineChart = ({ data, goal }) => {
+  const W = 600, H = 250, padL = 38, padR = 24, padT = 30, padB = 38;
+  const innerW = W - padL - padR;
+  const innerH = H - padT - padB;
+  const maxVal = Math.max(4, goal || 0, ...data.map(d => d.stars));
+  const minVal = Math.min(0, ...data.map(d => d.stars));
+  const yMax = Math.ceil(maxVal / 4) * 4;
+  const yMin = Math.floor(minVal / 4) * 4;
+  const xAt = (i) => (data.length === 1 ? padL + innerW / 2 : padL + (innerW * i) / (data.length - 1));
+  const yAt = (v) => padT + innerH - ((v - yMin) / (yMax - yMin)) * innerH;
+  const points = data.map((d, i) => ({ ...d, x: xAt(i), y: yAt(d.stars) }));
+  const linePath = points.map((p, i) => `${i ? 'L' : 'M'}${p.x},${p.y}`).join(' ');
+  const areaPath = `${linePath} L${points[points.length - 1].x},${yAt(0)} L${points[0].x},${yAt(0)} Z`;
+  const ticks = [0, 1, 2, 3, 4].map(i => yMin + ((yMax - yMin) * i) / 4);
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto" role="img" aria-label="Biểu đồ đường số sao theo thời gian">
+      <defs>
+        <linearGradient id="ktAreaGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#0ea5e9" stopOpacity="0.35" />
+          <stop offset="100%" stopColor="#0ea5e9" stopOpacity="0.02" />
+        </linearGradient>
+      </defs>
+
+      {/* Lưới ngang + nhãn trục Y */}
+      {ticks.map(t => (
+        <g key={t}>
+          <line x1={padL} x2={W - padR} y1={yAt(t)} y2={yAt(t)} className="stroke-slate-200 dark:stroke-slate-700" strokeWidth="1" />
+          <text x={padL - 8} y={yAt(t) + 4} textAnchor="end" fontSize="11" className="fill-slate-500 dark:fill-slate-400">{t}</text>
+        </g>
+      ))}
+
+      {/* Đường mục tiêu (chỉ có ở chế độ tuần) */}
+      {goal ? (
+        <g>
+          <line x1={padL} x2={W - padR} y1={yAt(goal)} y2={yAt(goal)} stroke="#f59e0b" strokeWidth="1.5" strokeDasharray="6 4" />
+          <text x={W - padR} y={yAt(goal) - 5} textAnchor="end" fontSize="11" fontWeight="700" className="fill-amber-600 dark:fill-amber-400">Mục tiêu {goal}</text>
+        </g>
+      ) : null}
+
+      {/* Vùng tô + đường */}
+      {points.length > 1 && <path d={areaPath} fill="url(#ktAreaGrad)" />}
+      {points.length > 1 && (
+        <path d={linePath} fill="none" stroke="#0ea5e9" strokeWidth="3" strokeLinejoin="round" strokeLinecap="round" />
+      )}
+
+      {/* Điểm + giá trị + nhãn trục X */}
+      {points.map((p, i) => {
+        const showLabel = data.length <= 8 || i % 2 === (data.length - 1) % 2;
+        return (
+          <g key={p.key}>
+            <circle cx={p.x} cy={p.y} r="5" fill="#0ea5e9" className="stroke-white dark:stroke-slate-800" strokeWidth="2" />
+            <text x={p.x} y={p.y - 11} textAnchor="middle" fontSize="12" fontWeight="800" className="fill-slate-800 dark:fill-slate-100">{p.stars}</text>
+            {showLabel && (
+              <text x={p.x} y={H - 14} textAnchor="middle" fontSize="11" className="fill-slate-600 dark:fill-slate-300">{p.label}</text>
+            )}
+          </g>
+        );
+      })}
+    </svg>
+  );
+};
+
 export default function KidTracker() {
-  const [user, setUser] = useState(() => JSON.parse(localStorage.getItem('kt_user')) || null);
+  const [user, setUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [dataLoaded, setDataLoaded] = useState(false);
+  const [syncError, setSyncError] = useState('');
   const [authMode, setAuthMode] = useState('login');
-  const [usernameInput, setUsernameInput] = useState('');
+  const [emailInput, setEmailInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [authError, setAuthError] = useState('');
@@ -60,37 +216,27 @@ export default function KidTracker() {
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem('kt_dark') === 'true');
   const [currentTab, setCurrentTab] = useState('tasks');
 
-  const [childName, setChildName] = useState(() => localStorage.getItem('kt_child_name') || 'Bé Ngoan');
-  const [childAvatar, setChildAvatar] = useState(() => localStorage.getItem('kt_child_avatar') || '👦');
-  const [totalStars, setTotalStars] = useState(() => parseInt(localStorage.getItem('kt_total_stars') || '10'));
-  const [weeklyGoal, setWeeklyGoal] = useState(() => parseInt(localStorage.getItem('kt_weekly_goal') || '20'));
-
-  const [tasks, setTasks] = useState(() => JSON.parse(localStorage.getItem('kt_tasks')) || [
-    { id: 't1', name: 'Đánh răng sáng tối', icon: '🪥' },
-    { id: 't2', name: 'Dọn dẹp đồ chơi', icon: '🧸' },
-    { id: 't3', name: 'Ăn hết phần cơm', icon: '🍚' },
-    { id: 't4', name: 'Làm bài tập', icon: '✏️' },
-    { id: 't5', name: 'Chào hỏi lễ phép', icon: '🙇‍♂️' },
-  ]);
-
-  const [rewards, setRewards] = useState(() => JSON.parse(localStorage.getItem('kt_rewards')) || [
-    { id: 'r1', name: 'Xem hoạt hình 15 phút', icon: '📺', cost: 5 },
-    { id: 'r2', name: 'Đi nhà sách mua truyện', icon: '📚', cost: 15 },
-    { id: 'r3', name: 'Đi chơi công viên', icon: '🎡', cost: 20 },
-    { id: 'r4', name: 'Mua đồ chơi nhỏ', icon: '🚗', cost: 30 },
-  ]);
+  const [childName, setChildName] = useState('Bé Ngoan');
+  const [childAvatar, setChildAvatar] = useState('👦');
+  const [totalStars, setTotalStars] = useState(0);
+  const [weeklyGoal, setWeeklyGoal] = useState(20);
+  const [tasks, setTasks] = useState(DEFAULT_TASKS);
+  const [rewards, setRewards] = useState(DEFAULT_REWARDS);
 
   const currentRealWeek = getWeekId();
   const [selectedWeek, setSelectedWeek] = useState(currentRealWeek);
-  const [weeklyMatrix, setWeeklyMatrix] = useState(() => JSON.parse(localStorage.getItem('kt_weekly_matrix')) || {});
-  const [bonusHistory, setBonusHistory] = useState(() => JSON.parse(localStorage.getItem('kt_bonus_history')) || []);
-  const [redeemHistory, setRedeemHistory] = useState(() => JSON.parse(localStorage.getItem('kt_redeem_history')) || []);
+  const [weeklyMatrix, setWeeklyMatrix] = useState({});
+  const [bonusHistory, setBonusHistory] = useState([]);
+  const [redeemHistory, setRedeemHistory] = useState([]);
 
   const [bonusPoints, setBonusPoints] = useState(1);
   const [bonusReason, setBonusReason] = useState('');
   const [leaderboardWeek, setLeaderboardWeek] = useState(currentRealWeek);
 
   const [pickerTarget, setPickerTarget] = useState(null);
+  const [statsView, setStatsView] = useState('week');
+  const [leaderboardEntries, setLeaderboardEntries] = useState([]);
+  const syncedRef = useRef({});
 
   useEffect(() => {
     localStorage.setItem('kt_dark', darkMode);
@@ -98,54 +244,163 @@ export default function KidTracker() {
     else document.documentElement.classList.remove('dark');
   }, [darkMode]);
 
-  useEffect(() => {
-    if (user) localStorage.setItem('kt_user', JSON.stringify(user));
-    else localStorage.removeItem('kt_user');
-  }, [user]);
+  const applyData = (d) => {
+    const data = d || {};
+    setChildName(data.childName ?? 'Bé Ngoan');
+    setChildAvatar(data.childAvatar ?? '👦');
+    setTotalStars(data.totalStars ?? 0);
+    setWeeklyGoal(data.weeklyGoal ?? 20);
+    setTasks(data.tasks ?? DEFAULT_TASKS);
+    setRewards(data.rewards ?? DEFAULT_REWARDS);
+    setWeeklyMatrix(data.weeklyMatrix ?? {});
+    setBonusHistory(data.bonusHistory ?? []);
+    setRedeemHistory(data.redeemHistory ?? []);
+  };
 
+  // Theo dõi đăng nhập + tải dữ liệu từ Firestore
   useEffect(() => {
-    localStorage.setItem('kt_child_name', childName);
-    localStorage.setItem('kt_child_avatar', childAvatar);
-    localStorage.setItem('kt_total_stars', totalStars);
-    localStorage.setItem('kt_weekly_goal', weeklyGoal);
-    localStorage.setItem('kt_tasks', JSON.stringify(tasks));
-    localStorage.setItem('kt_rewards', JSON.stringify(rewards));
-    localStorage.setItem('kt_weekly_matrix', JSON.stringify(weeklyMatrix));
-    localStorage.setItem('kt_bonus_history', JSON.stringify(bonusHistory));
-    localStorage.setItem('kt_redeem_history', JSON.stringify(redeemHistory));
-  }, [childName, childAvatar, totalStars, weeklyGoal, tasks, rewards, weeklyMatrix, bonusHistory, redeemHistory]);
+    const unsub = onAuthStateChanged(auth, async (fbUser) => {
+      syncedRef.current = {};
+      if (!fbUser) {
+        setUser(null);
+        setDataLoaded(false);
+        applyData(null);
+        setSyncError('');
+        setAuthLoading(false);
+        return;
+      }
+      setAuthLoading(true);
+      const info = { uid: fbUser.uid, email: fbUser.email, name: fbUser.displayName };
+      try {
+        const snap = await getDoc(doc(db, 'users', fbUser.uid));
+        if (snap.exists()) {
+          applyData(snap.data());
+        } else {
+          const legacy = readLocalLegacy();
+          if (legacy && window.confirm('Tìm thấy dữ liệu cũ lưu trên máy này. Chuyển lên tài khoản mới để không mất sao đã tích?')) {
+            applyData(legacy);
+          } else {
+            applyData({ childName: fbUser.displayName || (fbUser.email || '').split('@')[0] || 'Bé Ngoan' });
+          }
+        }
+        setUser(info);
+        setDataLoaded(true);
+        setSyncError('');
+      } catch (err) {
+        console.error(err);
+        setUser(info);
+        setDataLoaded(false);
+        setSyncError('Không tải được dữ liệu từ Firebase. Hãy kiểm tra đã tạo Firestore và đặt quy tắc bảo mật chưa.');
+      }
+      setAuthLoading(false);
+    });
+    return () => unsub();
+  }, []);
 
-  const handleAuthSubmit = (e) => {
+  // Lưu dữ liệu của bé lên Firestore (đợi 0,8 giây sau thay đổi cuối)
+  useEffect(() => {
+    if (!user || !dataLoaded) return;
+    const t = setTimeout(() => {
+      setDoc(doc(db, 'users', user.uid), {
+        childName, childAvatar, totalStars, weeklyGoal,
+        tasks, rewards, weeklyMatrix, bonusHistory, redeemHistory,
+        updatedAt: serverTimestamp(),
+      })
+        .then(() => setSyncError(''))
+        .catch((err) => {
+          console.error(err);
+          setSyncError('Không lưu được dữ liệu lên Firebase. Kiểm tra mạng hoặc quy tắc bảo mật.');
+        });
+    }, 800);
+    return () => clearTimeout(t);
+  }, [user?.uid, dataLoaded, childName, childAvatar, totalStars, weeklyGoal, tasks, rewards, weeklyMatrix, bonusHistory, redeemHistory]);
+
+  // Đẩy điểm từng tuần của bé lên bảng vàng chung của lớp
+  useEffect(() => {
+    if (!user || !dataLoaded) return;
+    const t = setTimeout(() => {
+      const weekly = {};
+      Object.entries(weeklyMatrix).forEach(([wk, wData]) => {
+        let c = 0;
+        Object.values(wData).forEach(days => Object.values(days).forEach(v => { if (v) c++; }));
+        weekly[wk] = c;
+      });
+      bonusHistory.forEach(l => { if (l.week) weekly[l.week] = (weekly[l.week] || 0) + l.points; });
+      if (weekly[currentRealWeek] === undefined) weekly[currentRealWeek] = 0;
+      const lbAvatar = (childAvatar.startsWith('data:') || childAvatar.startsWith('http')) ? '🙂' : childAvatar;
+      Object.entries(weekly).forEach(([wk, stars]) => {
+        const sig = `${stars}|${childName}|${lbAvatar}`;
+        if (syncedRef.current[wk] === sig) return;
+        syncedRef.current[wk] = sig;
+        setDoc(doc(db, 'weeklyScores', wk, 'entries', user.uid), {
+          name: childName, avatar: lbAvatar, stars, updatedAt: serverTimestamp(),
+        }).catch((err) => {
+          console.error(err);
+          delete syncedRef.current[wk];
+        });
+      });
+    }, 1000);
+    return () => clearTimeout(t);
+  }, [user?.uid, dataLoaded, weeklyMatrix, bonusHistory, childName, childAvatar, currentRealWeek]);
+
+  // Nghe bảng vàng của tuần đang chọn (chỉ khi mở tab Bảng vàng)
+  useEffect(() => {
+    if (!user || currentTab !== 'leaderboard') return;
+    const unsub = onSnapshot(
+      collection(db, 'weeklyScores', leaderboardWeek, 'entries'),
+      (snap) => setLeaderboardEntries(snap.docs.map(d => ({ uid: d.id, ...d.data() }))),
+      (err) => console.error(err)
+    );
+    return () => unsub();
+  }, [user?.uid, currentTab, leaderboardWeek]);
+
+  const handleAuthSubmit = async (e) => {
     e.preventDefault();
     setAuthError('');
-    if (!usernameInput.trim()) {
-      setAuthError('Vui lòng nhập tên đăng nhập!');
+    const email = emailInput.trim();
+    if (!email) {
+      setAuthError('Vui lòng nhập email!');
       return;
     }
     if (passwordInput.length < 6) {
       setAuthError('Mật khẩu phải có ít nhất 6 ký tự!');
       return;
     }
-    const registeredUsers = JSON.parse(localStorage.getItem('kt_registered_users') || '{}');
-    if (authMode === 'register') {
-      if (registeredUsers[usernameInput.toLowerCase()]) {
-        setAuthError('Tên đăng nhập này đã tồn tại, vui lòng chọn tên khác!');
-        return;
-      }
-      registeredUsers[usernameInput.toLowerCase()] = { password: passwordInput, name: usernameInput };
-      localStorage.setItem('kt_registered_users', JSON.stringify(registeredUsers));
-      setUser({ username: usernameInput });
-      setChildName(usernameInput);
-    } else {
-      const existingUser = registeredUsers[usernameInput.toLowerCase()];
-      if (!existingUser || existingUser.password !== passwordInput) {
-        setAuthError('Tên đăng nhập hoặc mật khẩu không chính xác!');
-        return;
-      }
-      setUser({ username: usernameInput });
-      setChildName(existingUser.name || usernameInput);
+    try {
+      if (authMode === 'register') await createUserWithEmailAndPassword(auth, email, passwordInput);
+      else await signInWithEmailAndPassword(auth, email, passwordInput);
+    } catch (err) {
+      setAuthError(authErrorMessage(err.code));
     }
   };
+
+  const handleGoogleLogin = async () => {
+    setAuthError('');
+    try {
+      await signInWithPopup(auth, new GoogleAuthProvider());
+    } catch (err) {
+      if (err.code !== 'auth/popup-closed-by-user' && err.code !== 'auth/cancelled-popup-request') {
+        setAuthError(authErrorMessage(err.code));
+      }
+    }
+  };
+
+  const handleResetPassword = async () => {
+    setAuthError('');
+    const email = emailInput.trim();
+    if (!email) {
+      setAuthError('Nhập email vào ô trên rồi bấm "Quên mật khẩu" nhé!');
+      return;
+    }
+    try {
+      await sendPasswordResetEmail(auth, email);
+      alert('Đã gửi email đặt lại mật khẩu. Hãy kiểm tra hộp thư (cả mục Spam).');
+    } catch (err) {
+      setAuthError(authErrorMessage(err.code));
+    }
+  };
+
+  const handleLogout = () => signOut(auth);
 
   const daysOfWeek = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
 
@@ -167,8 +422,12 @@ export default function KidTracker() {
     Object.values(weekData).forEach(taskDays => {
       Object.values(taskDays).forEach(val => { if (val) count++; });
     });
+    // Cộng/trừ điểm thưởng phạt đột xuất của tuần đang xem
+    bonusHistory.forEach(log => {
+      if (log.week === selectedWeek) count += log.points;
+    });
     return count;
-  }, [weeklyMatrix, selectedWeek]);
+  }, [weeklyMatrix, bonusHistory, selectedWeek]);
 
   const handleApplyBonus = (isPositive) => {
     if (!bonusReason.trim()) {
@@ -227,15 +486,26 @@ export default function KidTracker() {
     }
   };
 
+  // Thu nhỏ ảnh về 128x128 để lưu gọn trên Firestore
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setChildAvatar(reader.result);
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const size = 128;
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const min = Math.min(img.width, img.height);
+        canvas.getContext('2d').drawImage(img, (img.width - min) / 2, (img.height - min) / 2, min, min, 0, 0, size, size);
+        setChildAvatar(canvas.toDataURL('image/jpeg', 0.8));
       };
-      reader.readAsDataURL(file);
-    }
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
   };
 
   const handleEmojiSelect = (emojiData) => {
@@ -249,30 +519,95 @@ export default function KidTracker() {
     setPickerTarget(null);
   };
 
-  const classLeaderboard = useMemo(() => {
-    const mockList = [
-      { name: 'Minh Trí', avatar: '🦁', stars: 28 },
-      { name: 'Khánh Mai', avatar: '🦄', stars: 24 },
-      { name: 'Bảo An', avatar: '🐱', stars: 21 },
-      { name: childName, avatar: childAvatar, stars: starsEarnedInSelectedWeek, isSelf: true },
-      { name: 'Đức Anh', avatar: '🚀', stars: 16 },
-      { name: 'Gia Hân', avatar: '👑', stars: 12 },
-    ];
-    return mockList.sort((a, b) => b.stars - a.stars);
-  }, [childName, childAvatar, starsEarnedInSelectedWeek]);
+  const leaderboardStars = useMemo(() => {
+    const weekData = weeklyMatrix[leaderboardWeek] || {};
+    let count = 0;
+    Object.values(weekData).forEach(taskDays => {
+      Object.values(taskDays).forEach(val => { if (val) count++; });
+    });
+    bonusHistory.forEach(log => {
+      if (log.week === leaderboardWeek) count += log.points;
+    });
+    return count;
+  }, [weeklyMatrix, bonusHistory, leaderboardWeek]);
 
-  const weeklyStatsList = useMemo(() => {
-    const weeksMap = {};
+  const leaderboardWeekOptions = useMemo(() => {
+    const prevDate = new Date();
+    prevDate.setDate(prevDate.getDate() - 7);
+    const prevWeek = getWeekId(prevDate);
+    const all = new Set([
+      currentRealWeek,
+      prevWeek,
+      ...Object.keys(weeklyMatrix),
+      ...bonusHistory.map(l => l.week).filter(Boolean),
+    ]);
+    return Array.from(all).sort().reverse().map(w => ({
+      id: w,
+      label: w === currentRealWeek ? `Tuần này (${w})` : w === prevWeek ? `Tuần trước (${w})` : `Tuần ${w}`,
+    }));
+  }, [weeklyMatrix, bonusHistory, currentRealWeek]);
+
+  const classLeaderboard = useMemo(() => {
+    const list = leaderboardEntries.map(e => (
+      e.uid === user?.uid
+        ? { name: childName, avatar: childAvatar, stars: leaderboardStars, isSelf: true }
+        : { name: e.name || 'Bạn nhỏ', avatar: e.avatar || '🙂', stars: e.stars ?? 0, isSelf: false }
+    ));
+    // Bé nhà mình luôn có mặt, kể cả khi chưa kịp đồng bộ
+    if (user && !list.some(i => i.isSelf)) {
+      list.push({ name: childName, avatar: childAvatar, stars: leaderboardStars, isSelf: true });
+    }
+    return list.sort((a, b) => b.stars - a.stars);
+  }, [leaderboardEntries, user?.uid, childName, childAvatar, leaderboardStars]);
+
+  const statsData = useMemo(() => {
+    const counts = {};
     Object.keys(weeklyMatrix).forEach(wk => {
       let count = 0;
-      const wData = weeklyMatrix[wk];
-      Object.values(wData).forEach(taskDays => {
+      Object.values(weeklyMatrix[wk]).forEach(taskDays => {
         Object.values(taskDays).forEach(v => { if (v) count++; });
       });
-      weeksMap[wk] = count;
+      counts[wk] = count;
     });
-    return Object.entries(weeksMap).map(([wk, stars]) => ({ week: wk, stars })).sort((a, b) => b.week.localeCompare(a.week));
-  }, [weeklyMatrix]);
+    // Cộng/trừ điểm thưởng phạt đột xuất vào đúng tuần đã ghi nhận
+    bonusHistory.forEach(log => {
+      if (log.week) counts[log.week] = (counts[log.week] || 0) + log.points;
+    });
+    const keys = Object.keys(counts).sort();
+    if (keys.length === 0) return { weekly: [], monthly: [] };
+
+    // Lấp các tuần trống bằng 0 để đường biểu đồ không bị "nhảy cóc"
+    const lastKey = keys[keys.length - 1] > currentRealWeek ? keys[keys.length - 1] : currentRealWeek;
+    const cursor = weekIdToThursday(keys[0]);
+    const end = weekIdToThursday(lastKey);
+    const fullWeeks = [];
+    while (cursor <= end) {
+      const id = getWeekId(cursor);
+      fullWeeks.push({ key: id, label: id.split('-')[1], stars: counts[id] || 0 });
+      cursor.setDate(cursor.getDate() + 7);
+    }
+
+    const monthMap = {};
+    fullWeeks.forEach(w => {
+      const t = weekIdToThursday(w.key);
+      const mKey = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}`;
+      monthMap[mKey] = (monthMap[mKey] || 0) + w.stars;
+    });
+    const fullMonths = Object.keys(monthMap).sort().map(k => {
+      const [y, m] = k.split('-');
+      return { key: k, label: `T${parseInt(m)}/${y.slice(2)}`, stars: monthMap[k] };
+    });
+
+    return { weekly: fullWeeks.slice(-12), monthly: fullMonths.slice(-12) };
+  }, [weeklyMatrix, bonusHistory, currentRealWeek]);
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-sky-50 dark:bg-slate-900 text-slate-700 dark:text-slate-200 font-bold">
+        ⭐ Đang tải dữ liệu...
+      </div>
+    );
+  }
 
   if (!user) {
     return (
@@ -286,13 +621,13 @@ export default function KidTracker() {
 
           <form onSubmit={handleAuthSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-semibold mb-1 text-slate-700 dark:text-slate-200">Tên đăng nhập (Username)</label>
+              <label className="block text-sm font-semibold mb-1 text-slate-700 dark:text-slate-200">Email</label>
               <input
-                type="text"
+                type="email"
                 required
-                value={usernameInput}
-                onChange={(e) => setUsernameInput(e.target.value)}
-                placeholder="VD: nhoc_bin"
+                value={emailInput}
+                onChange={(e) => setEmailInput(e.target.value)}
+                placeholder="VD: phuhuynh@gmail.com"
                 className="w-full px-4 py-3 rounded-xl border bg-white border-slate-300 text-slate-900 dark:bg-slate-700 dark:border-slate-600 dark:text-white focus:outline-none focus:ring-2 focus:ring-sky-400 shadow-sm"
               />
             </div>
@@ -333,6 +668,26 @@ export default function KidTracker() {
             </button>
           </form>
 
+          <div className="flex items-center gap-3 my-5 text-xs text-slate-500 dark:text-slate-400">
+            <div className="flex-1 h-px bg-slate-200 dark:bg-slate-600" />
+            <span>hoặc</span>
+            <div className="flex-1 h-px bg-slate-200 dark:bg-slate-600" />
+          </div>
+
+          <button
+            type="button"
+            onClick={handleGoogleLogin}
+            className="w-full py-3 flex items-center justify-center gap-2 rounded-xl border bg-white border-slate-300 text-slate-800 font-bold text-sm hover:bg-slate-50 dark:bg-slate-700 dark:border-slate-600 dark:text-white dark:hover:bg-slate-600 shadow-sm transition-all"
+          >
+            <svg className="w-5 h-5" viewBox="0 0 48 48">
+              <path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.9 6.1C12.4 13.6 17.7 9.5 24 9.5z" />
+              <path fill="#4285F4" d="M46.1 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.4c-.5 2.9-2.2 5.3-4.6 6.9l7.1 5.5c4.2-3.9 7.2-9.6 7.2-16.9z" />
+              <path fill="#FBBC05" d="M10.5 28.7c-.5-1.4-.8-2.9-.8-4.7s.3-3.3.8-4.7l-7.9-6.1C.9 16.4 0 20.1 0 24s.9 7.6 2.6 10.8l7.9-6.1z" />
+              <path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.1-5.5c-2 1.4-4.6 2.2-8.8 2.2-6.3 0-11.6-4.1-13.5-9.8l-7.9 6.1C6.5 42.6 14.6 48 24 48z" />
+            </svg>
+            Đăng nhập bằng Google
+          </button>
+
           <div className="mt-6 text-center text-sm">
             <button
               type="button"
@@ -344,6 +699,15 @@ export default function KidTracker() {
             >
               {authMode === 'login' ? 'Chưa có tài khoản? Đăng ký ngay' : 'Đã có tài khoản? Đăng nhập'}
             </button>
+            {authMode === 'login' && (
+              <button
+                type="button"
+                onClick={handleResetPassword}
+                className="block mx-auto mt-3 text-xs text-slate-600 dark:text-slate-300 hover:underline"
+              >
+                Quên mật khẩu?
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -414,6 +778,12 @@ export default function KidTracker() {
       {/* MAIN CONTENT AREA */}
       <main className="max-w-4xl mx-auto p-4 space-y-6">
 
+        {syncError && (
+          <div className="p-3 text-sm bg-rose-100 border border-rose-300 text-rose-700 rounded-xl text-center font-medium">
+            ⚠ {syncError}
+          </div>
+        )}
+
         {/* TAB 1: NHIỆM VỤ */}
         {currentTab === 'tasks' && (
           <div className="space-y-4">
@@ -463,12 +833,12 @@ export default function KidTracker() {
             <div className={`p-4 rounded-2xl border ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-sky-200 shadow-sm'}`}>
               <div className="flex justify-between items-center text-xs font-bold mb-1.5 text-slate-800 dark:text-slate-200">
                 <span>🎯 Tiến độ mục tiêu tuần này</span>
-                <span>{Math.round((starsEarnedInSelectedWeek / weeklyGoal) * 100)}%</span>
+                <span>{Math.max(0, Math.round((starsEarnedInSelectedWeek / weeklyGoal) * 100))}%</span>
               </div>
               <div className="w-full bg-slate-200 dark:bg-slate-700 h-3.5 rounded-full overflow-hidden p-0.5">
                 <div
                   className="bg-gradient-to-r from-sky-400 to-emerald-400 h-full rounded-full transition-all duration-500"
-                  style={{ width: `${Math.min(100, (starsEarnedInSelectedWeek / weeklyGoal) * 100)}%` }}
+                  style={{ width: `${Math.max(0, Math.min(100, (starsEarnedInSelectedWeek / weeklyGoal) * 100))}%` }}
                 />
               </div>
             </div>
@@ -622,8 +992,9 @@ export default function KidTracker() {
               <div className="inline-flex items-center space-x-2 mt-4 px-3 py-1 bg-white/30 backdrop-blur-md rounded-xl text-xs font-bold text-white">
                 <span>Xem tuần:</span>
                 <select value={leaderboardWeek} onChange={(e) => setLeaderboardWeek(e.target.value)} className="bg-transparent font-black focus:outline-none cursor-pointer">
-                  <option value={currentRealWeek} className="text-slate-900">Tuần này ({currentRealWeek})</option>
-                  <option value="2026-W39" className="text-slate-900">Tuần trước (2026-W39)</option>
+                  {leaderboardWeekOptions.map(opt => (
+                    <option key={opt.id} value={opt.id} className="text-slate-900">{opt.label}</option>
+                  ))}
                 </select>
               </div>
             </div>
@@ -661,30 +1032,59 @@ export default function KidTracker() {
         {currentTab === 'stats' && (
           <div className="space-y-6">
             <div className={`p-4 rounded-2xl border space-y-4 ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-sky-200 shadow-sm'}`}>
-              <h2 className="font-extrabold text-base text-slate-900 dark:text-white flex items-center gap-2">
-                <span>📈 Performance Trending (Phong độ qua các tuần)</span>
-              </h2>
-
-              {weeklyStatsList.length === 0 ? (
-                <p className="text-xs text-slate-500 dark:text-slate-400 text-center py-6">Chưa có dữ liệu lịch sử các tuần trước.</p>
-              ) : (
-                <div className="space-y-3">
-                  {weeklyStatsList.map(stat => (
-                    <div key={stat.week} className="space-y-1">
-                      <div className="flex justify-between text-xs font-bold text-slate-800 dark:text-slate-300">
-                        <span>Tuần: {stat.week}</span>
-                        <span className="text-amber-500">{stat.stars} ⭐</span>
-                      </div>
-                      <div className="w-full bg-slate-200 dark:bg-slate-700 h-3 rounded-full overflow-hidden">
-                        <div
-                          className="bg-gradient-to-r from-sky-400 to-amber-400 h-full rounded-full transition-all"
-                          style={{ width: `${Math.min(100, (stat.stars / (weeklyGoal || 20)) * 100)}%` }}
-                        />
-                      </div>
-                    </div>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h2 className="font-extrabold text-base text-slate-900 dark:text-white flex items-center gap-2">
+                  <span>📈 Phong độ qua các {statsView === 'week' ? 'tuần' : 'tháng'} <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">(đã gồm điểm thưởng/phạt)</span></span>
+                </h2>
+                <div className="flex p-1 rounded-xl bg-sky-100 dark:bg-slate-700">
+                  {[
+                    { id: 'week', label: 'Theo tuần' },
+                    { id: 'month', label: 'Theo tháng' },
+                  ].map(opt => (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => setStatsView(opt.id)}
+                      className={`px-3 py-1 text-xs font-bold rounded-lg transition-all ${
+                        statsView === opt.id
+                          ? 'bg-sky-500 text-white shadow-sm'
+                          : 'text-sky-800 hover:bg-sky-200 dark:text-slate-300 dark:hover:bg-slate-600'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
                   ))}
                 </div>
-              )}
+              </div>
+
+              {(() => {
+                const chartData = statsView === 'week' ? statsData.weekly : statsData.monthly;
+                if (chartData.length === 0) {
+                  return <p className="text-xs text-slate-500 dark:text-slate-400 text-center py-6">Chưa có dữ liệu lịch sử các tuần trước.</p>;
+                }
+                const total = chartData.reduce((sum, d) => sum + d.stars, 0);
+                const avg = Math.round((total / chartData.length) * 10) / 10;
+                const best = chartData.reduce((m, d) => (d.stars > m.stars ? d : m), chartData[0]);
+                return (
+                  <div className="space-y-3">
+                    <LineChart data={chartData} goal={statsView === 'week' ? weeklyGoal : null} />
+                    <div className="grid grid-cols-3 gap-2 text-center">
+                      <div className="p-2 rounded-xl bg-sky-50 dark:bg-slate-700/60 border border-sky-100 dark:border-slate-600">
+                        <p className="text-[10px] text-slate-600 dark:text-slate-300">Tổng sao</p>
+                        <p className="font-black text-sm text-slate-900 dark:text-white">{total} ⭐</p>
+                      </div>
+                      <div className="p-2 rounded-xl bg-sky-50 dark:bg-slate-700/60 border border-sky-100 dark:border-slate-600">
+                        <p className="text-[10px] text-slate-600 dark:text-slate-300">Trung bình / {statsView === 'week' ? 'tuần' : 'tháng'}</p>
+                        <p className="font-black text-sm text-slate-900 dark:text-white">{avg} ⭐</p>
+                      </div>
+                      <div className="p-2 rounded-xl bg-sky-50 dark:bg-slate-700/60 border border-sky-100 dark:border-slate-600">
+                        <p className="text-[10px] text-slate-600 dark:text-slate-300">Cao nhất ({best.label})</p>
+                        <p className="font-black text-sm text-slate-900 dark:text-white">{best.stars} ⭐</p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
 
             <div className={`p-4 rounded-2xl border space-y-3 ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-sky-200 shadow-sm'}`}>
@@ -831,10 +1231,10 @@ export default function KidTracker() {
 
             <div className="pt-2">
               <button
-                onClick={() => setUser(null)}
+                onClick={handleLogout}
                 className="w-full py-3 bg-rose-500 hover:bg-rose-600 text-white font-bold text-sm rounded-2xl shadow-md transition-all"
               >
-                Đăng Xuất ({user.username})
+                Đăng Xuất ({user.email || user.name})
               </button>
             </div>
           </div>
