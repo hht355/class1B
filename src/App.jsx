@@ -276,7 +276,7 @@ export default function KidTracker() {
 
   if (!user) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-sky-100 to-indigo-100 text-slate-800 dark:bg-slate-900 dark:text-white">
+      <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-sky-100 to-indigo-100 text-slate-800 dark:from-slate-900 dark:to-slate-900 dark:bg-slate-900 dark:text-white">
         <div className="w-full max-w-md p-8 rounded-3xl shadow-xl bg-white dark:bg-slate-800 border border-sky-100 dark:border-slate-700">
           <div className="text-center mb-8">
             <div className="inline-block p-4 rounded-full bg-amber-100 mb-3 text-4xl shadow-inner">⭐</div>
@@ -376,7 +376,7 @@ export default function KidTracker() {
           <div className="flex items-center space-x-3">
             <button
               onClick={() => setDarkMode(!darkMode)}
-              className={`p-2 rounded-xl border transition-all ${darkMode ? 'bg-slate-700 border-slate-600 text-amber-400' : 'bg-slate-100 border-slate-200 text-slate-700'}`}
+              className={`p-2 rounded-xl border transition-all ${darkMode ? 'bg-slate-700 border-slate-600 text-amber-400' : 'bg-sky-500 hover:bg-sky-600 border-sky-600 text-white'}`}
               title="Bật/Tắt chế độ tối"
             >
               {darkMode ? <IconSun /> : <IconMoon />}
@@ -433,7 +433,7 @@ export default function KidTracker() {
                     const wNum = parseInt(w) - 1;
                     setSelectedWeek(`${y}-W${wNum < 10 ? '0' + wNum : wNum}`);
                   }}
-                  className="px-3 py-1.5 text-xs font-bold rounded-xl border bg-sky-50 border-sky-200 text-sky-800 hover:bg-sky-100 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-200 shadow-sm"
+                  className="px-3 py-1.5 text-xs font-bold rounded-xl border bg-sky-500 border-sky-600 text-white hover:bg-sky-600 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-600 shadow-sm"
                 >
                   ◄ Tuần trước
                 </button>
@@ -441,7 +441,7 @@ export default function KidTracker() {
                 {selectedWeek !== currentRealWeek && (
                   <button
                     onClick={() => setSelectedWeek(currentRealWeek)}
-                    className="px-3 py-1.5 text-xs font-bold rounded-xl bg-sky-500 text-white shadow-sm"
+                    className="px-3 py-1.5 text-xs font-bold rounded-xl bg-sky-500 hover:bg-sky-600 text-white shadow-sm"
                   >
                     Tuần hiện tại
                   </button>
@@ -453,7 +453,7 @@ export default function KidTracker() {
                     const wNum = parseInt(w) + 1;
                     setSelectedWeek(`${y}-W${wNum < 10 ? '0' + wNum : wNum}`);
                   }}
-                  className="px-3 py-1.5 text-xs font-bold rounded-xl border bg-sky-50 border-sky-200 text-sky-800 hover:bg-sky-100 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-200 shadow-sm"
+                  className="px-3 py-1.5 text-xs font-bold rounded-xl border bg-sky-500 border-sky-600 text-white hover:bg-sky-600 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-600 shadow-sm"
                 >
                   Tuần sau ►
                 </button>
@@ -506,10 +506,10 @@ export default function KidTracker() {
                                     className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all ${
                                       isChecked
                                         ? 'bg-amber-400 text-amber-950 shadow-md shadow-amber-400/30 scale-105'
-                                        : 'bg-sky-50 text-sky-400 hover:bg-sky-100 border border-sky-200 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-400'
+                                        : 'bg-sky-500 hover:bg-sky-600 border border-sky-600 dark:bg-slate-700 dark:hover:bg-slate-600 dark:border-slate-600'
                                     }`}
                                   >
-                                    <IconStar className={isChecked ? 'text-amber-950 w-6 h-6' : 'text-sky-300 dark:text-slate-500 w-5 h-5'} />
+                                    <IconStar className={isChecked ? 'text-amber-950 w-6 h-6' : 'text-sky-200 dark:text-slate-500 w-5 h-5'} />
                                   </button>
                                 </div>
                               </td>
@@ -771,7 +771,7 @@ export default function KidTracker() {
                     <button
                       type="button"
                       onClick={() => setPickerTarget({ type: 'task', id: task.id })}
-                      className="w-10 h-10 text-xl rounded-xl border bg-sky-50 border-sky-200 dark:bg-slate-700 dark:border-slate-600 shadow-sm flex items-center justify-center hover:bg-sky-100"
+                      className="w-10 h-10 text-xl rounded-xl border bg-sky-50 border-sky-200 dark:bg-slate-700 dark:border-slate-600 shadow-sm flex items-center justify-center hover:bg-sky-100 dark:hover:bg-slate-600"
                     >
                       {task.icon}
                     </button>
@@ -786,7 +786,7 @@ export default function KidTracker() {
                 ))}
                 <button
                   onClick={() => setTasks([...tasks, { id: 't_' + Date.now(), name: 'Nhiệm vụ mới', icon: '🌟' }])}
-                  className="w-full py-2 bg-sky-50 dark:bg-sky-900/30 text-sky-700 dark:text-sky-300 font-bold text-xs rounded-xl border border-dashed border-sky-300"
+                  className="w-full py-2 bg-sky-500 hover:bg-sky-600 text-white font-bold text-xs rounded-xl shadow-sm dark:bg-sky-900/30 dark:hover:bg-sky-900/50 dark:text-sky-300 dark:border dark:border-dashed dark:border-sky-300"
                 >
                   + Thêm nhiệm vụ mới
                 </button>
@@ -801,7 +801,7 @@ export default function KidTracker() {
                     <button
                       type="button"
                       onClick={() => setPickerTarget({ type: 'reward', id: reward.id })}
-                      className="w-10 h-10 text-xl rounded-xl border bg-sky-50 border-sky-200 dark:bg-slate-700 dark:border-slate-600 shadow-sm flex items-center justify-center hover:bg-sky-100"
+                      className="w-10 h-10 text-xl rounded-xl border bg-sky-50 border-sky-200 dark:bg-slate-700 dark:border-slate-600 shadow-sm flex items-center justify-center hover:bg-sky-100 dark:hover:bg-slate-600"
                     >
                       {reward.icon}
                     </button>
@@ -822,7 +822,7 @@ export default function KidTracker() {
                 ))}
                 <button
                   onClick={() => setRewards([...rewards, { id: 'r_' + Date.now(), name: 'Phần thưởng mới', icon: '🎁', cost: 10 }])}
-                  className="w-full py-2 bg-sky-50 dark:bg-sky-900/30 text-sky-700 dark:text-sky-300 font-bold text-xs rounded-xl border border-dashed border-sky-300"
+                  className="w-full py-2 bg-sky-500 hover:bg-sky-600 text-white font-bold text-xs rounded-xl shadow-sm dark:bg-sky-900/30 dark:hover:bg-sky-900/50 dark:text-sky-300 dark:border dark:border-dashed dark:border-sky-300"
                 >
                   + Thêm phần thưởng mới
                 </button>
