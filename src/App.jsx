@@ -7,7 +7,13 @@ import {
   signInWithPopup,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
-  sendPasswordResetEmail,
+  linkWithPopup,
+  unlink,
+  updatePassword,
+  reauthenticateWithCredential,
+  reauthenticateWithPopup,
+  EmailAuthProvider,
+  deleteUser,
   signOut,
   onAuthStateChanged,
 } from 'firebase/auth';
@@ -113,18 +119,29 @@ const readLocalLegacy = () => {
   }
 };
 
+// Đăng nhập bằng tên đăng nhập: app tự ghép thành email "ảo" để dùng với Firebase Auth.
+// (example.com là tên miền dành riêng, không ai sở hữu và không nhận thư)
+const AUTH_EMAIL_SUFFIX = '@kidtracker.example.com';
+const USERNAME_RE = /^[a-z0-9_-]{3,20}$/;
+const usernameToEmail = (username) => `${username}${AUTH_EMAIL_SUFFIX}`;
+const emailToUsername = (email) =>
+  email && email.endsWith(AUTH_EMAIL_SUFFIX) ? email.slice(0, -AUTH_EMAIL_SUFFIX.length) : null;
+
 const authErrorMessage = (code) => ({
-  'auth/invalid-email': 'Email không hợp lệ!',
-  'auth/missing-email': 'Vui lòng nhập email!',
-  'auth/email-already-in-use': 'Email này đã được đăng ký, hãy đăng nhập!',
+  'auth/invalid-email': 'Tên đăng nhập hoặc email không hợp lệ!',
+  'auth/missing-email': 'Vui lòng nhập tên đăng nhập!',
+  'auth/email-already-in-use': 'Tên đăng nhập này đã tồn tại, vui lòng chọn tên khác!',
   'auth/weak-password': 'Mật khẩu quá yếu, cần ít nhất 6 ký tự!',
-  'auth/invalid-credential': 'Email hoặc mật khẩu không chính xác!',
-  'auth/user-not-found': 'Email hoặc mật khẩu không chính xác!',
-  'auth/wrong-password': 'Email hoặc mật khẩu không chính xác!',
+  'auth/invalid-credential': 'Tên đăng nhập hoặc mật khẩu không chính xác!',
+  'auth/user-not-found': 'Tên đăng nhập hoặc mật khẩu không chính xác!',
+  'auth/wrong-password': 'Tên đăng nhập hoặc mật khẩu không chính xác!',
   'auth/too-many-requests': 'Thử quá nhiều lần, vui lòng đợi một lát rồi thử lại!',
   'auth/network-request-failed': 'Mất kết nối mạng, vui lòng thử lại!',
   'auth/popup-blocked': 'Trình duyệt đang chặn cửa sổ đăng nhập Google!',
   'auth/unauthorized-domain': 'Tên miền này chưa được cho phép trong Firebase (Authentication > Settings > Authorized domains).',
+  'auth/requires-recent-login': 'Vì lý do bảo mật, hãy đăng xuất, đăng nhập lại rồi thử lại!',
+  'auth/credential-already-in-use': 'Tài khoản Google này đã được dùng cho một tài khoản khác!',
+  'auth/provider-already-linked': 'Tài khoản đã được liên kết với Google rồi!',
 }[code] || 'Có lỗi xảy ra, vui lòng thử lại!');
 
 // Lấy ngày Thứ Năm của một tuần ISO (VD "2026-W40") để suy ra tháng
@@ -208,10 +225,18 @@ export default function KidTracker() {
   const [dataLoaded, setDataLoaded] = useState(false);
   const [syncError, setSyncError] = useState('');
   const [authMode, setAuthMode] = useState('login');
-  const [emailInput, setEmailInput] = useState('');
+  const [usernameInput, setUsernameInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [authError, setAuthError] = useState('');
+  const [confirmInput, setConfirmInput] = useState('');
+  const [showForgot, setShowForgot] = useState(false);
+  const [accountMsg, setAccountMsg] = useState(null);
+  const [accountBusy, setAccountBusy] = useState(false);
+  const [curPw, setCurPw] = useState('');
+  const [newPw, setNewPw] = useState('');
+  const [newPw2, setNewPw2] = useState('');
+  const [deletePw, setDeletePw] = useState('');
 
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem('kt_dark') === 'true');
   const [currentTab, setCurrentTab] = useState('tasks');
@@ -238,6 +263,7 @@ export default function KidTracker() {
   const [leaderboardEntries, setLeaderboardEntries] = useState([]);
   const [joinLeaderboard, setJoinLeaderboard] = useState(true);
   const syncedRef = useRef({});
+  const recoveryModeRef = useRef(false);
 
   useEffect(() => {
     localStorage.setItem('kt_dark', darkMode);
@@ -271,8 +297,22 @@ export default function KidTracker() {
         setAuthLoading(false);
         return;
       }
+      // Đang "Quên mật khẩu" bằng Google: nếu Google này chưa liên kết tài khoản nào thì xóa tài khoản vừa tự tạo
+      const fromRecovery = recoveryModeRef.current;
+      recoveryModeRef.current = false;
+      if (fromRecovery && fbUser.metadata.creationTime === fbUser.metadata.lastSignInTime) {
+        try { await deleteUser(fbUser); } catch (e) { console.error(e); await signOut(auth); }
+        setAuthError('Tài khoản Google này chưa được liên kết với tên đăng nhập nào nên không thể khôi phục.');
+        setAuthLoading(false);
+        return;
+      }
       setAuthLoading(true);
-      const info = { uid: fbUser.uid, email: fbUser.email, name: fbUser.displayName };
+      const info = {
+        uid: fbUser.uid,
+        email: fbUser.email,
+        name: fbUser.displayName,
+        providers: fbUser.providerData.map(pd => pd.providerId),
+      };
       try {
         const snap = await getDoc(doc(db, 'users', fbUser.uid));
         if (snap.exists()) {
@@ -288,6 +328,10 @@ export default function KidTracker() {
         setUser(info);
         setDataLoaded(true);
         setSyncError('');
+        if (fromRecovery) {
+          setCurrentTab('settings');
+          setAccountMsg({ kind: 'ok', text: 'Đã khôi phục bằng Google. Hãy đặt mật khẩu mới ở mục "Đổi mật khẩu" bên dưới (để trống ô mật khẩu hiện tại).' });
+        }
       } catch (err) {
         console.error(err);
         setUser(info);
@@ -372,14 +416,30 @@ export default function KidTracker() {
   const handleAuthSubmit = async (e) => {
     e.preventDefault();
     setAuthError('');
-    const email = emailInput.trim();
-    if (!email) {
-      setAuthError('Vui lòng nhập email!');
+    const raw = usernameInput.trim();
+    if (!raw) {
+      setAuthError('Vui lòng nhập tên đăng nhập!');
       return;
     }
     if (passwordInput.length < 6) {
       setAuthError('Mật khẩu phải có ít nhất 6 ký tự!');
       return;
+    }
+    let email;
+    if (authMode === 'register') {
+      const uname = raw.toLowerCase();
+      if (!USERNAME_RE.test(uname)) {
+        setAuthError('Tên đăng nhập gồm 3–20 ký tự: chữ không dấu, số, dấu _ hoặc -');
+        return;
+      }
+      if (passwordInput !== confirmInput) {
+        setAuthError('Mật khẩu nhập lại không khớp!');
+        return;
+      }
+      email = usernameToEmail(uname);
+    } else {
+      // Có @ => tài khoản cũ đăng ký bằng email thật
+      email = raw.includes('@') ? raw : usernameToEmail(raw.toLowerCase());
     }
     try {
       if (authMode === 'register') await createUserWithEmailAndPassword(auth, email, passwordInput);
@@ -400,19 +460,119 @@ export default function KidTracker() {
     }
   };
 
-  const handleResetPassword = async () => {
+  // "Quên mật khẩu": đăng nhập bằng Google đã liên kết từ trước
+  const handleRecoveryGoogle = async () => {
     setAuthError('');
-    const email = emailInput.trim();
-    if (!email) {
-      setAuthError('Nhập email vào ô trên rồi bấm "Quên mật khẩu" nhé!');
+    recoveryModeRef.current = true;
+    try {
+      await signInWithPopup(auth, new GoogleAuthProvider());
+    } catch (err) {
+      recoveryModeRef.current = false;
+      if (err.code !== 'auth/popup-closed-by-user' && err.code !== 'auth/cancelled-popup-request') {
+        setAuthError(authErrorMessage(err.code));
+      }
+    }
+  };
+
+  const refreshProviders = () => {
+    const u = auth.currentUser;
+    if (u) setUser(prev => (prev ? { ...prev, providers: u.providerData.map(pd => pd.providerId) } : prev));
+  };
+
+  const reauthErrorMessage = (code) =>
+    (code === 'auth/invalid-credential' || code === 'auth/wrong-password')
+      ? 'Mật khẩu hiện tại không đúng!'
+      : authErrorMessage(code);
+
+  const handleLinkGoogle = async () => {
+    setAccountMsg(null);
+    try {
+      await linkWithPopup(auth.currentUser, new GoogleAuthProvider());
+      refreshProviders();
+      setAccountMsg({ kind: 'ok', text: 'Đã liên kết Google. Nếu quên mật khẩu, bạn có thể khôi phục bằng Google ở màn hình đăng nhập.' });
+    } catch (err) {
+      if (err.code !== 'auth/popup-closed-by-user' && err.code !== 'auth/cancelled-popup-request') {
+        setAccountMsg({ kind: 'err', text: authErrorMessage(err.code) });
+      }
+    }
+  };
+
+  const handleUnlinkGoogle = async () => {
+    if (!window.confirm('Hủy liên kết Google? Sau đó bạn sẽ không thể khôi phục mật khẩu bằng Google.')) return;
+    setAccountMsg(null);
+    try {
+      await unlink(auth.currentUser, 'google.com');
+      refreshProviders();
+      setAccountMsg({ kind: 'ok', text: 'Đã hủy liên kết Google.' });
+    } catch (err) {
+      setAccountMsg({ kind: 'err', text: authErrorMessage(err.code) });
+    }
+  };
+
+  const handleChangePassword = async () => {
+    setAccountMsg(null);
+    if (newPw.length < 6) {
+      setAccountMsg({ kind: 'err', text: 'Mật khẩu mới phải có ít nhất 6 ký tự!' });
       return;
     }
-    try {
-      await sendPasswordResetEmail(auth, email);
-      alert('Đã gửi email đặt lại mật khẩu. Hãy kiểm tra hộp thư (cả mục Spam).');
-    } catch (err) {
-      setAuthError(authErrorMessage(err.code));
+    if (newPw !== newPw2) {
+      setAccountMsg({ kind: 'err', text: 'Mật khẩu mới nhập lại không khớp!' });
+      return;
     }
+    const u = auth.currentUser;
+    setAccountBusy(true);
+    try {
+      if (curPw) await reauthenticateWithCredential(u, EmailAuthProvider.credential(u.email, curPw));
+      await updatePassword(u, newPw);
+      setCurPw('');
+      setNewPw('');
+      setNewPw2('');
+      setAccountMsg({ kind: 'ok', text: 'Đã đổi mật khẩu thành công!' });
+    } catch (err) {
+      setAccountMsg({ kind: 'err', text: reauthErrorMessage(err.code) });
+    }
+    setAccountBusy(false);
+  };
+
+  const handleDeleteAccount = async () => {
+    setAccountMsg(null);
+    const u = auth.currentUser;
+    const hasPw = (user?.providers || []).includes('password');
+    if (hasPw && !deletePw) {
+      setAccountMsg({ kind: 'err', text: 'Nhập mật khẩu hiện tại để xác nhận xóa tài khoản!' });
+      return;
+    }
+    if (!window.confirm('Xóa VĨNH VIỄN tài khoản và toàn bộ dữ liệu của bé (sao, nhiệm vụ, lịch sử, điểm trên bảng vàng)? Không thể khôi phục!')) return;
+    setAccountBusy(true);
+    try {
+      if (hasPw) await reauthenticateWithCredential(u, EmailAuthProvider.credential(u.email, deletePw));
+      else await reauthenticateWithPopup(u, new GoogleAuthProvider());
+
+      setDataLoaded(false); // dừng tự động lưu/đồng bộ
+      const weeks = new Set([
+        ...Object.keys(weeklyMatrix),
+        ...bonusHistory.map(l => l.week).filter(Boolean),
+        ...Object.keys(syncedRef.current),
+        currentRealWeek, leaderboardWeek, selectedWeek,
+      ]);
+      await Promise.all(
+        Array.from(weeks).map(wk => deleteDoc(doc(db, 'weeklyScores', wk, 'entries', u.uid)).catch(() => {}))
+      );
+      await deleteDoc(doc(db, 'users', u.uid));
+      await deleteUser(u);
+
+      // Xóa luôn dữ liệu cũ (trước khi có Firebase) còn trên máy này
+      Object.keys(localStorage).forEach(k => { if (k.startsWith('kt_') && k !== 'kt_dark') localStorage.removeItem(k); });
+      setDeletePw('');
+      alert('Tài khoản và dữ liệu đã được xóa.');
+    } catch (err) {
+      console.error(err);
+      setDataLoaded(true);
+      if (err.code !== 'auth/popup-closed-by-user' && err.code !== 'auth/cancelled-popup-request') {
+        setAccountMsg({ kind: 'err', text: reauthErrorMessage(err.code) });
+      }
+    }
+    setAccountBusy(false);
   };
 
   const handleLogout = () => signOut(auth);
@@ -636,13 +796,15 @@ export default function KidTracker() {
 
           <form onSubmit={handleAuthSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-semibold mb-1 text-slate-700 dark:text-slate-200">Email</label>
+              <label className="block text-sm font-semibold mb-1 text-slate-700 dark:text-slate-200">{authMode === 'login' ? 'Tên đăng nhập (hoặc email)' : 'Tên đăng nhập'}</label>
               <input
-                type="email"
+                type="text"
                 required
-                value={emailInput}
-                onChange={(e) => setEmailInput(e.target.value)}
-                placeholder="VD: phuhuynh@gmail.com"
+                autoComplete="username"
+                autoCapitalize="none"
+                value={usernameInput}
+                onChange={(e) => setUsernameInput(e.target.value)}
+                placeholder="VD: nhoc_bin"
                 className="w-full px-4 py-3 rounded-xl border bg-white border-slate-300 text-slate-900 dark:bg-slate-700 dark:border-slate-600 dark:text-white focus:outline-none focus:ring-2 focus:ring-sky-400 shadow-sm"
               />
             </div>
@@ -668,6 +830,24 @@ export default function KidTracker() {
               </div>
               <p className="text-xs text-sky-600 dark:text-sky-400 font-medium mt-1">💡 Mật khẩu cần tối thiểu 6 ký tự</p>
             </div>
+
+            {authMode === 'register' && (
+              <div>
+                <label className="block text-sm font-semibold mb-1 text-slate-700 dark:text-slate-200">Nhập lại mật khẩu</label>
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  required
+                  autoComplete="new-password"
+                  value={confirmInput}
+                  onChange={(e) => setConfirmInput(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full px-4 py-3 rounded-xl border bg-white border-slate-300 text-slate-900 dark:bg-slate-700 dark:border-slate-600 dark:text-white focus:outline-none focus:ring-2 focus:ring-sky-400 shadow-sm"
+                />
+                <p className="text-xs text-amber-700 dark:text-amber-400 font-medium mt-1">
+                  ⚠ Không dùng email nên không gửi lại được mật khẩu. Hãy ghi nhớ mật khẩu hoặc liên kết Google trong Cài đặt sau khi đăng ký.
+                </p>
+              </div>
+            )}
 
             {authError && (
               <div className="p-3 text-sm bg-rose-100 border border-rose-300 text-rose-700 rounded-xl text-center font-medium">
@@ -709,25 +889,52 @@ export default function KidTracker() {
               onClick={() => {
                 setAuthMode(authMode === 'login' ? 'register' : 'login');
                 setAuthError('');
+                setConfirmInput('');
+                setShowForgot(false);
               }}
               className="text-sky-600 dark:text-sky-400 hover:underline font-bold"
             >
               {authMode === 'login' ? 'Chưa có tài khoản? Đăng ký ngay' : 'Đã có tài khoản? Đăng nhập'}
             </button>
             {authMode === 'login' && (
-              <button
-                type="button"
-                onClick={handleResetPassword}
-                className="block mx-auto mt-3 text-xs text-slate-600 dark:text-slate-300 hover:underline"
-              >
-                Quên mật khẩu?
-              </button>
+              <div className="mt-3">
+                <button
+                  type="button"
+                  onClick={() => setShowForgot(!showForgot)}
+                  className="text-xs text-slate-600 dark:text-slate-300 hover:underline"
+                >
+                  Quên mật khẩu?
+                </button>
+                {showForgot && (
+                  <div className="mt-3 p-3 text-left text-xs rounded-xl bg-sky-50 border border-sky-200 text-slate-700 dark:bg-slate-700/60 dark:border-slate-600 dark:text-slate-200 space-y-2">
+                    <p>
+                      Tài khoản dùng tên đăng nhập không có email nên không gửi được thư đặt lại mật khẩu. Nếu trước đây bạn đã <b>liên kết Google</b> (Cài đặt → Tài khoản), hãy khôi phục bằng Google rồi đặt mật khẩu mới:
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleRecoveryGoogle}
+                      className="w-full py-2 bg-sky-500 hover:bg-sky-600 text-white font-bold rounded-xl shadow-sm"
+                    >
+                      Khôi phục bằng Google đã liên kết
+                    </button>
+                    <p className="opacity-80">
+                      Nếu chưa liên kết Google từ trước thì hiện chưa thể lấy lại mật khẩu, bạn cần đăng ký tài khoản mới.
+                    </p>
+                  </div>
+                )}
+              </div>
             )}
           </div>
         </div>
       </div>
     );
   }
+
+  const providers = user.providers || [];
+  const hasPassword = providers.includes('password');
+  const hasGoogle = providers.includes('google.com');
+  const accountLabel = emailToUsername(user.email) || user.email || user.name || '';
+  const inputCls = 'w-full px-3 py-2 text-sm rounded-xl border bg-white border-slate-300 text-slate-900 dark:bg-slate-700 dark:border-slate-600 dark:text-white shadow-sm';
 
   return (
     <div className={`min-h-screen transition-colors duration-200 pb-24 ${darkMode ? 'bg-slate-900 text-slate-100' : 'bg-sky-50 text-slate-900'}`}>
@@ -1283,12 +1490,79 @@ export default function KidTracker() {
               </div>
             </div>
 
+            <div className={`p-4 rounded-2xl border space-y-4 ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-sky-200 shadow-sm'}`}>
+              <h3 className="font-bold text-sm border-b pb-2 text-slate-900 dark:text-white border-sky-100 dark:border-slate-700">🔐 Tài khoản</h3>
+
+              <p className="text-xs text-slate-700 dark:text-slate-300">
+                {emailToUsername(user.email) ? 'Tên đăng nhập' : 'Đăng nhập bằng'}: <b className="text-slate-900 dark:text-white">{accountLabel}</b>
+              </p>
+
+              {accountMsg && (
+                <div className={`p-3 text-xs rounded-xl border font-medium ${accountMsg.kind === 'ok' ? 'bg-emerald-50 border-emerald-200 text-emerald-800 dark:bg-emerald-950/30 dark:border-emerald-800 dark:text-emerald-300' : 'bg-rose-100 border-rose-300 text-rose-700'}`}>
+                  {accountMsg.kind === 'ok' ? '✅ ' : '⚠ '}{accountMsg.text}
+                </div>
+              )}
+
+              {hasPassword && (
+                <div className="space-y-2">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="space-y-0.5">
+                      <p className="text-sm font-bold text-slate-900 dark:text-white">Liên kết Google để khôi phục mật khẩu</p>
+                      <p className="text-xs text-slate-600 dark:text-slate-300">
+                        {hasGoogle ? 'Đã liên kết. Quên mật khẩu thì chọn "Khôi phục bằng Google" ở màn hình đăng nhập.' : 'Chưa liên kết. Nên liên kết ngay để không bị mất tài khoản khi quên mật khẩu.'}
+                      </p>
+                    </div>
+                    {hasGoogle ? (
+                      <button type="button" onClick={handleUnlinkGoogle} className="shrink-0 px-3 py-2 text-xs font-bold rounded-xl bg-rose-100 hover:bg-rose-200 text-rose-700">Hủy liên kết</button>
+                    ) : (
+                      <button type="button" onClick={handleLinkGoogle} className="shrink-0 px-3 py-2 text-xs font-bold rounded-xl bg-sky-500 hover:bg-sky-600 text-white shadow-sm">Liên kết Google</button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {hasPassword && (
+                <div className="space-y-2 pt-3 border-t border-sky-100 dark:border-slate-700">
+                  <p className="text-sm font-bold text-slate-900 dark:text-white">Đổi mật khẩu</p>
+                  <input type="password" autoComplete="current-password" value={curPw} onChange={(e) => setCurPw(e.target.value)} placeholder="Mật khẩu hiện tại (bỏ trống nếu vừa khôi phục bằng Google)" className={inputCls} />
+                  <input type="password" autoComplete="new-password" value={newPw} onChange={(e) => setNewPw(e.target.value)} placeholder="Mật khẩu mới (tối thiểu 6 ký tự)" className={inputCls} />
+                  <input type="password" autoComplete="new-password" value={newPw2} onChange={(e) => setNewPw2(e.target.value)} placeholder="Nhập lại mật khẩu mới" className={inputCls} />
+                  <button
+                    type="button"
+                    onClick={handleChangePassword}
+                    disabled={accountBusy}
+                    className="w-full py-2.5 bg-sky-500 hover:bg-sky-600 disabled:opacity-60 text-white font-bold text-sm rounded-xl shadow-sm"
+                  >
+                    {accountBusy ? 'Đang xử lý...' : 'Đổi mật khẩu'}
+                  </button>
+                </div>
+              )}
+
+              <div className="space-y-2 pt-3 border-t border-sky-100 dark:border-slate-700">
+                <p className="text-sm font-bold text-rose-600 dark:text-rose-400">Xóa tài khoản</p>
+                <p className="text-xs text-slate-600 dark:text-slate-300">
+                  Xóa vĩnh viễn tài khoản cùng toàn bộ dữ liệu (sao, nhiệm vụ, lịch sử, điểm trên bảng vàng). Không thể khôi phục.
+                </p>
+                {hasPassword && (
+                  <input type="password" autoComplete="current-password" value={deletePw} onChange={(e) => setDeletePw(e.target.value)} placeholder="Nhập mật khẩu hiện tại để xác nhận" className={inputCls} />
+                )}
+                <button
+                  type="button"
+                  onClick={handleDeleteAccount}
+                  disabled={accountBusy}
+                  className="w-full py-2.5 bg-rose-500 hover:bg-rose-600 disabled:opacity-60 text-white font-bold text-sm rounded-xl shadow-sm"
+                >
+                  {accountBusy ? 'Đang xử lý...' : 'Xóa tài khoản vĩnh viễn'}
+                </button>
+              </div>
+            </div>
+
             <div className="pt-2">
               <button
                 onClick={handleLogout}
                 className="w-full py-3 bg-rose-500 hover:bg-rose-600 text-white font-bold text-sm rounded-2xl shadow-md transition-all"
               >
-                Đăng Xuất ({user.email || user.name})
+                Đăng Xuất ({accountLabel})
               </button>
             </div>
           </div>
